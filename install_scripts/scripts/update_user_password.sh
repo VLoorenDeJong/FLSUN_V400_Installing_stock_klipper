@@ -45,8 +45,9 @@ read_password() {
 print_header "Update Login Password"
 printf "\nWhich user's password do you want to change?\n"
 printf "  1) Current user (%s)\n" "$ACTUAL_USER"
-printf "  2) A different user\n\n"
-read -rp "Enter 1 or 2: " USER_CHOICE
+printf "  2) A different user\n"
+printf "  3) Skip\n\n"
+read -rp "Enter 1, 2 or 3: " USER_CHOICE
 printf "\n"
 
 case "$USER_CHOICE" in
@@ -61,8 +62,12 @@ case "$USER_CHOICE" in
             exit 1
         fi
         ;;
+    3)
+        print_status "Skipping password update."
+        exit 0
+        ;;
     *)
-        print_error "Invalid choice. Please run the script again and enter 1 or 2."
+        print_error "Invalid choice. Please run the script again and enter 1, 2 or 3."
         exit 1
         ;;
 esac
