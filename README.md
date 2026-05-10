@@ -51,23 +51,6 @@ Automates the setup of stock Klipper on an FLSUN V400 Speeder Pad by running a s
    ```
    *(Tip: type `cd FL` then press `TAB` for autocomplete)*
 
-1. Check your OS version:
-   ```shell
-   lsb_release -a
-   ```
-
-1. List available branches:
-   ```shell
-   git branch -r
-   ```
-
-1. Switch to your version branch:
-   ```shell
-   git checkout YOUR_BRANCH_NAME
-   ```
-   *(No quotes, no `origin/`. Use `TAB` for autocomplete)*
-   Success: `Switched to a new branch 'YOUR_BRANCH_NAME'`
-
 1. Make scripts executable:
    ```shell
    sudo chmod -R +x .
