@@ -23,8 +23,14 @@ if ! command -v timedatectl >/dev/null 2>&1; then
 fi
 
 if ! command -v iw >/dev/null 2>&1; then
-    echo -e "\e[31m❌ iw command is not installed. Install package: iw\e[0m"
-    exit 1
+    echo -e "\e[33m⚠️  iw not found. Installing...\e[0m"
+    apt-get update -qq >/dev/null 2>&1
+    apt-get install -y -qq iw >/dev/null 2>&1
+    if ! command -v iw >/dev/null 2>&1; then
+        echo -e "\e[31m❌ Failed to install iw. Cannot configure Wi-Fi country.\e[0m"
+        exit 1
+    fi
+    echo -e "\e[32m✅ iw installed\e[0m"
 fi
 
 IW_BIN="$(command -v iw)"

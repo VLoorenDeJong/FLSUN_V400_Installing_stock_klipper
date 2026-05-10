@@ -3,10 +3,16 @@
 # Suppress confirmation prompts
 export DEBIAN_FRONTEND=noninteractive
 
-# Check if UFW is installed, else exit
+# Install UFW if not present
 if ! command -v ufw &> /dev/null; then
-    echo -e "\e[31mError: UFW is not installed! Exiting...\e[0m"
-    exit 1
+    echo -e "\e[33m⚠️  UFW not found. Installing...\e[0m"
+    apt-get update -qq >/dev/null 2>&1
+    apt-get install -y -qq ufw >/dev/null 2>&1
+    if ! command -v ufw &> /dev/null; then
+        echo -e "\e[31mError: UFW installation failed! Exiting...\e[0m"
+        exit 1
+    fi
+    echo -e "\e[32m✅ UFW installed\e[0m"
 fi
 
 # Allow SSH connections without asking for confirmation
