@@ -1,82 +1,41 @@
 #!/bin/bash
 
 # =============================================================================
-# CONFIGURATION
+# FLSUN V400 Speeder Pad — Installation Menu
 # =============================================================================
-# Set to 0 to skip reboot prompt, set to 1 to ask user about reboot
-# If reboot.sh is present in SCRIPT_PARAMS, it controls reboot timing.
-ASK_FOR_REBOOT=0
 
 debugMode=0
-verboseMode=0
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -q|--quiet)
-            verboseMode=0
-            shift
-            ;;
-        -v|--verbose)
-            verboseMode=1
-            shift
-            ;;
-        -d|--debug)
-            debugMode=1
-            shift
-            ;;
+        -d|--debug) debugMode=1; shift ;;
         -h|--help)
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Installation script for Linux server setup"
-            echo ""
-            echo "Options:"
-            echo "  -q, --quiet     Run in quiet mode (less output) [default]"
-            echo "  -v, --verbose   Run in verbose mode (more output)"
-            echo "  -d, --debug     Enable debug mode (bash -x)"
-            echo "  -h, --help      Show this help message"
-            echo ""
-            echo "Configuration:"
-            echo "  Scripts to run are hardcoded in this file"
-            echo "  For different configurations, use different branches"
-            echo ""
-            echo "Examples:"
-            echo "  sudo $0                    # Normal verbose mode"
-            echo "  sudo $0 --quiet           # Quiet mode"
-            echo "  sudo $0 --debug           # Debug mode"
+            echo "Usage: sudo $0 [OPTIONS]"
+            echo "  -d, --debug   Enable bash -x debug output"
+            echo "  -h, --help    Show this help"
             exit 0
             ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Use -h or --help for usage information"
-            exit 1
-            ;;
+        *) echo "Unknown option: $1 (use -h for help)"; exit 1 ;;
     esac
 done
 
-# Export verbosity setting for child scripts
-export VERBOSE_MODE="$verboseMode"
-
-# Check if running with sudo privileges
+# Must run as root
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m❌ This script requires sudo privileges to run properly.\e[0m"
-    echo -e "\e[33m💡 Please run with: \e[36msudo $0\e[0m"
-    echo -e "\e[33m   This will avoid password prompts during installation.\e[0m"
+    echo -e "\e[31m❌ Run with sudo: sudo $0\e[0m"
     exit 1
 fi
 
-# Get the directory where this script resides
-SCRIPT_DIR=$(dirname "$0")
-INSTALL_DIR="$(cd "$SCRIPT_DIR" && pwd)/scripts"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_DIR="$SCRIPT_DIR/scripts"
 
-# Set common parameters
-USER_PARAM="$SUDO_USER"
+# =============================================================================
+# PHASE DEFINITIONS
+# =============================================================================
 
-# Define the scripts to run with their parameters
-# Format: "script_name" or "script_name:param1" or "script_name:param1:param2"
-SCRIPT_PARAMS=(
+# Phase 1 — OS preparation (ends with reboot)
+PHASE1_SCRIPTS=(
     "cleanup_repositories.sh"
-    "fix_dpkg_lock.sh"
     "fix_xauthority.sh"
     "set_scripts_executable.sh"
     "update_user_password.sh"
@@ -87,195 +46,229 @@ SCRIPT_PARAMS=(
     "add_ufw.sh"
     "add_ssh.sh"
     "add_bash_show_branch_name.sh"
-    "add_flsun_speeder_pad_installer.sh"
-    "add_kiauh.sh"
-    "start_kiauh.sh"
-    "add_webmin.sh"
-    #// ToDo Figure out the path for the gcode files and add the parameter in smb.conf
-#    "add_smb.sh"
     "set_scripts_executable.sh"
     "reboot.sh"
 )
 
-echo -e "\e[34m🚀 Beginning installation sequence...\e[0m"
+# Phase 2 — Klipper stack (required steps, run in order)
+PHASE2_SCRIPTS=(
+    "cleanup_repositories.sh"
+    "add_network_manager.sh"
+    "add_flsun_speeder_pad_installer.sh"
+    "add_flsun_sp_installer2.sh"
+    "cleanup_flsun_builds.sh"
+    "add_kiauh.sh"
+    "start_kiauh.sh"
+    "set_scripts_executable.sh"
+    "reboot.sh"
+)
 
-# Detect if reboot is already handled as part of the script pipeline
-HAS_REBOOT_SCRIPT=false
-for script_entry in "${SCRIPT_PARAMS[@]}"; do
-    script_name=$(echo "$script_entry" | cut -d':' -f1)
-    if [[ "$script_name" == "reboot.sh" ]]; then
-        HAS_REBOOT_SCRIPT=true
-        break
-    fi
-done
+# Optional extras (shown as checklist in Phase 2 and standalone menu)
+declare -A OPTIONAL_LABELS=(
+    ["add_webmin.sh"]="Webmin  (web-based admin panel)"
+    ["add_apache_webserver.sh"]="Apache  (web server)"
+    ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
+)
+OPTIONAL_ORDER=("add_webmin.sh" "add_apache_webserver.sh" "add_smb.sh")
 
-# Configure reboot behavior based on setting
-if [ "$ASK_FOR_REBOOT" -eq 1 ]; then
-    # Ask user about reboot preference
-    printf "\e[34mDo you want to reboot after all scripts complete successfully? [Y/n]:\e[0m "
-    read -r REBOOT_CHOICE
-    # Default to Y if empty input or Y/y, otherwise no reboot
-    case "$REBOOT_CHOICE" in
-        [Nn]*)
-            SHOULD_REBOOT=false
-            ;;
-        *)
-            SHOULD_REBOOT=true
-            ;;
-    esac
-else
-    # Don't ask for reboot - default to no automatic reboot in this wrapper
-    SHOULD_REBOOT=false
-fi
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
-# Avoid double reboot if reboot.sh is already part of the execution array
-if $HAS_REBOOT_SCRIPT; then
-    SHOULD_REBOOT=false
-fi
-
-# Track missing scripts
-MISSING=()
-
-# Check for existence of all scripts first
-for script_entry in "${SCRIPT_PARAMS[@]}"; do
-    # Extract just the script name (before any colon)
-    script_name=$(echo "$script_entry" | cut -d':' -f1)
-    if [[ ! -f "$INSTALL_DIR/$script_name" ]]; then
-        MISSING+=("$script_name")
-    fi
-done
-
-# If any scripts are missing, display and exit
-if [ ${#MISSING[@]} -gt 0 ]; then
-    echo -e "\e[31m🚫 The following script(s) are missing:\e[0m"
-    for script in "${MISSING[@]}"; do
-        echo -e "\e[31m - $script\e[0m"
-    done
-    exit 1
-fi
-
-# Run the scripts
-ALL_SUCCESS=true
-FAILED_SCRIPTS=()
-CRITICAL_FAILED=false
-
-# Function to run DPKG lock fix
 run_lock_fix() {
     local fix_script="$INSTALL_DIR/fix_dpkg_lock.sh"
     if [[ -f "$fix_script" ]]; then
         echo -e "\e[34m🔧 Checking and fixing DPKG locks...\e[0m"
-        if bash "$fix_script"; then
-            echo -e "\e[32m✅ DPKG locks resolved\e[0m"
-            return 0
-        else
+        bash "$fix_script" && echo -e "\e[32m✅ DPKG locks resolved\e[0m" || \
             echo -e "\e[33m⚠️  DPKG lock fix failed, continuing anyway...\e[0m"
-            return 1
-        fi
+    fi
+}
+
+run_script() {
+    local script_name="$1"
+    local script_path="$INSTALL_DIR/$script_name"
+
+    if [[ ! -f "$script_path" ]]; then
+        echo -e "\e[31m❌ Script not found: $script_name\e[0m"
+        return 1
+    fi
+
+    # Run dpkg lock fix before every apt-touching script
+    case "$script_name" in
+        updates_install_and_clean.sh|update_kernel.sh|upgrade_distro.sh|\
+        add_network_manager.sh|add_flsun_speeder_pad_installer.sh|\
+        add_flsun_sp_installer2.sh|add_kiauh.sh|add_webmin.sh|\
+        add_apache_webserver.sh|add_smb.sh)
+            run_lock_fix ;;
+    esac
+
+    echo -e "\e[34m🚀 Running: $script_name\e[0m"
+    local run_cmd="bash"
+    [[ "$debugMode" -eq 1 ]] && run_cmd="bash -x"
+
+    if $run_cmd "$script_path"; then
+        echo -e "\e[32m✅ Finished: $script_name\e[0m"
+        echo ""
+        return 0
     else
-        echo -e "\e[33m⚠️  fix_dpkg_lock.sh not found, skipping lock check\e[0m"
+        local code=$?
+        echo -e "\e[31m❌ Failed: $script_name (exit code: $code)\e[0m"
+        echo -e "\e[33m💡 To debug: sudo bash -x '$script_path'\e[0m"
+        echo ""
         return 1
     fi
 }
 
-# Run initial lock fix before starting any scripts
-run_lock_fix
+run_sequence() {
+    local scripts=("$@")
+    local all_ok=true
 
-for script_entry in "${SCRIPT_PARAMS[@]}"; do
-    # Parse script entry: "script_name:param1:param2" or just "script_name"
-    script_name=$(echo "$script_entry" | cut -d':' -f1)
-    param1=$(echo "$script_entry" | cut -d':' -f2)
-    param2=$(echo "$script_entry" | cut -d':' -f3)
-    
-    # Skip running fix_dpkg_lock.sh again since we handle it separately
-    if [[ "$script_name" == "fix_dpkg_lock.sh" ]]; then
-        echo -e "\e[34m⏭️  Skipping $script_name (handled separately)\e[0m"
-        continue
-    fi
-
-    # Only run reboot.sh if all previous scripts have succeeded
-    if [[ "$script_name" == "reboot.sh" && "$ALL_SUCCESS" != "true" ]]; then
-        echo -e "\e[33m⏭️  Skipping reboot.sh because previous scripts failed\e[0m"
-        continue
-    fi
-    
-    # Run lock fix before each script (except the lock fix itself)
-    run_lock_fix
-    
-    echo -e "\e[34m🚀 Running: $script_name\e[0m"
-    
-    # Choose execution method based on debugMode
-    if [ "$debugMode" -eq 1 ]; then
-        RUN_CMD="bash -x"
-    else
-        RUN_CMD="bash"
-    fi
-    
-    # Build the command with parameters
-    if [ -n "$param1" ] && [ -n "$param2" ]; then
-        # Two parameters
-        CMD="$RUN_CMD '$INSTALL_DIR/$script_name' '$param1' '$param2'"
-    elif [ -n "$param1" ]; then
-        # One parameter
-        CMD="$RUN_CMD '$INSTALL_DIR/$script_name' '$param1'"
-    else
-        # No parameters
-        CMD="$RUN_CMD '$INSTALL_DIR/$script_name'"
-    fi
-    
-    # Execute the command
-    if eval "$CMD"; then
-        echo -e "\e[32m✅ Finished: $script_name\e[0m"
-    else
-        exit_code=$?
-        echo -e "\e[31m❌ Failed: $script_name (exit code: $exit_code)\e[0m"
-        echo -e "\e[33m💡 Check the error messages above for details\e[0m"
-        echo -e "\e[33m📂 Script location: $INSTALL_DIR/$script_name\e[0m"
-        echo -e "\e[33m🔍 To debug, run manually: sudo $CMD"
-        ALL_SUCCESS=false
-        FAILED_SCRIPTS+=("$script_name (exit code: $exit_code)")
-        case "$script_name" in
-            "add_pinecraft.sh")
-                CRITICAL_FAILED=true
-                echo -e "\e[33m⚠️  Note: Pinecraft failed - minecraft customizations may not work properly\e[0m"
-                ;;
-        esac
-    fi
-    echo "" # Add spacing between scripts
-done
-
-# Check if reboot is needed and requested
-if $ALL_SUCCESS && $SHOULD_REBOOT; then
-    echo -e "\e[32m🎉 All scripts completed successfully!\e[0m"
-    echo -e "\e[34mRebooting in 5 seconds... (Press Ctrl+C to cancel)\e[0m"
-    sleep 5
-    bash "$INSTALL_DIR/reboot.sh"
-elif $ALL_SUCCESS; then
-    echo -e "\e[32m🎉 All scripts completed successfully! No reboot requested.\e[0m"
-else
-    echo -e "\e[33m⚠️  Installation completed with some failures.\e[0m"
-    echo -e "\e[31m💥 Failed scripts:\e[0m"
-    for failed_script in "${FAILED_SCRIPTS[@]}"; do
-        echo -e "\e[31m - $failed_script\e[0m"
+    for script in "${scripts[@]}"; do
+        # Skip reboot if previous steps failed
+        if [[ "$script" == "reboot.sh" && "$all_ok" == "false" ]]; then
+            echo -e "\e[33m⏭️  Skipping reboot — previous steps failed\e[0m"
+            continue
+        fi
+        run_script "$script" || all_ok=false
     done
-    if $CRITICAL_FAILED; then
-        echo -e "\e[33m⚠️  Critical components failed - some features may not work properly.\e[0m"
-        echo -e "\e[33m💡 You can try running the failed scripts manually later.\e[0m"
-    fi
-    if $SHOULD_REBOOT; then
-        printf "\e[33m❓ Some scripts failed. Do you still want to reboot? [y/N]: \e[0m"
-        read -r REBOOT_ANYWAY
-        case "$REBOOT_ANYWAY" in
-            [Yy]*)
-                echo -e "\e[34mRebooting in 5 seconds... (Press Ctrl+C to cancel)\e[0m"
-                sleep 5
-                bash "$INSTALL_DIR/reboot.sh"
-                ;;
-            *)
-                echo -e "\e[33m🚫 Reboot skipped due to failed scripts.\e[0m"
-                ;;
-        esac
+
+    if $all_ok; then
+        echo -e "\e[32m🎉 All steps completed successfully!\e[0m"
     else
-        echo -e "\e[33m🚫 No reboot requested.\e[0m"
+        echo -e "\e[33m⚠️  Completed with failures. Check output above.\e[0m"
     fi
-    exit 0
-fi
+}
+
+# Show a numbered checklist and return selected script names in SELECTED array
+optional_checklist() {
+    declare -g -a SELECTED=()
+    local toggles=()
+    for s in "${OPTIONAL_ORDER[@]}"; do toggles+=("off"); done
+
+    while true; do
+        echo ""
+        echo -e "\e[36m--- Optional Extras (toggle with number, Enter to confirm) ---\e[0m"
+        for i in "${!OPTIONAL_ORDER[@]}"; do
+            local s="${OPTIONAL_ORDER[$i]}"
+            local mark="[ ]"
+            [[ "${toggles[$i]}" == "on" ]] && mark="[x]"
+            printf "  %d) %s  %s\n" "$((i+1))" "$mark" "${OPTIONAL_LABELS[$s]}"
+        done
+        echo "  a) Select all"
+        echo "  n) Select none"
+        echo "  Enter) Confirm and continue"
+        echo ""
+        read -rp "Choice: " opt
+        case "$opt" in
+            a) for i in "${!toggles[@]}"; do toggles[$i]="on"; done ;;
+            n) for i in "${!toggles[@]}"; do toggles[$i]="off"; done ;;
+            "") break ;;
+            [0-9]*)
+                local idx=$((opt-1))
+                if [[ $idx -ge 0 && $idx -lt ${#OPTIONAL_ORDER[@]} ]]; then
+                    [[ "${toggles[$idx]}" == "on" ]] && toggles[$idx]="off" || toggles[$idx]="on"
+                else
+                    echo -e "\e[33m⚠️  Invalid number\e[0m"
+                fi ;;
+            *) echo -e "\e[33m⚠️  Invalid input\e[0m" ;;
+        esac
+    done
+
+    for i in "${!OPTIONAL_ORDER[@]}"; do
+        [[ "${toggles[$i]}" == "on" ]] && SELECTED+=("${OPTIONAL_ORDER[$i]}")
+    done
+}
+
+# Individual scripts submenu
+menu_individual() {
+    local all_scripts=()
+    while IFS= read -r -d '' f; do
+        all_scripts+=("$(basename "$f")")
+    done < <(find "$INSTALL_DIR" -maxdepth 1 -name "*.sh" -print0 | sort -z)
+
+    while true; do
+        echo ""
+        echo -e "\e[36m=== Run Individual Script ===\e[0m"
+        for i in "${!all_scripts[@]}"; do
+            printf "  %2d) %s\n" "$((i+1))" "${all_scripts[$i]}"
+        done
+        echo "   b) Back"
+        echo ""
+        read -rp "Choice: " opt
+        [[ "$opt" == "b" ]] && break
+        if [[ "$opt" =~ ^[0-9]+$ ]]; then
+            local idx=$((opt-1))
+            if [[ $idx -ge 0 && $idx -lt ${#all_scripts[@]} ]]; then
+                run_script "${all_scripts[$idx]}"
+                read -rp "Press Enter to continue..." _
+            else
+                echo -e "\e[33m⚠️  Invalid number\e[0m"
+            fi
+        else
+            echo -e "\e[33m⚠️  Invalid input\e[0m"
+        fi
+    done
+}
+
+# =============================================================================
+# MAIN MENU
+# =============================================================================
+
+while true; do
+    echo ""
+    echo -e "\e[36m╔══════════════════════════════════════════════════╗\e[0m"
+    echo -e "\e[36m║   FLSUN V400 Speeder Pad — Installation Menu     ║\e[0m"
+    echo -e "\e[36m╚══════════════════════════════════════════════════╝\e[0m"
+    echo ""
+    echo -e "  \e[33m1)\e[0m Phase 1 — OS prep + distro upgrade  \e[90m(ends with reboot)\e[0m"
+    echo -e "  \e[33m2)\e[0m Phase 2 — Klipper/Mainsail/Moonraker/KlipperScreen + optional extras"
+    echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Apache, Samba)\e[0m"
+    echo -e "  \e[33m4)\e[0m Run individual script"
+    echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
+    echo -e "  \e[33mq)\e[0m Quit"
+    echo ""
+    read -rp "Choice: " MAIN_CHOICE
+
+    case "$MAIN_CHOICE" in
+        1)
+            echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
+            run_sequence "${PHASE1_SCRIPTS[@]}"
+            ;;
+        2)
+            echo -e "\n\e[36m=== Phase 2 — Klipper Stack ===\e[0m"
+            # Ask about optional extras first
+            echo -e "\nSelect optional extras to install after the required Phase 2 steps:"
+            optional_checklist
+            run_sequence "${PHASE2_SCRIPTS[@]}"
+            if [[ ${#SELECTED[@]} -gt 0 ]]; then
+                echo -e "\e[36m--- Running selected optional extras ---\e[0m"
+                run_sequence "${SELECTED[@]}"
+            fi
+            ;;
+        3)
+            echo -e "\n\e[36m=== Optional Extras ===\e[0m"
+            optional_checklist
+            if [[ ${#SELECTED[@]} -gt 0 ]]; then
+                run_sequence "${SELECTED[@]}"
+            else
+                echo -e "\e[33m⚠️  Nothing selected.\e[0m"
+            fi
+            ;;
+        4)
+            menu_individual
+            ;;
+        5)
+            echo -e "\n\e[36m=== Full Install: Phase 1 + Phase 2 ===\e[0m"
+            echo -e "\e[33m⚠️  Phase 1 ends with a reboot. After reboot, run this script again and choose option 2.\e[0m"
+            read -rp "Start Phase 1 now? [y/N]: " confirm
+            [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence "${PHASE1_SCRIPTS[@]}"
+            ;;
+        q|Q)
+            echo -e "\e[32m👋 Goodbye!\e[0m"
+            exit 0
+            ;;
+        *)
+            echo -e "\e[33m⚠️  Invalid choice, try again.\e[0m"
+            ;;
+    esac
+done
