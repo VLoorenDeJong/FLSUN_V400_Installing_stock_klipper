@@ -31,7 +31,7 @@ show_progress() {
     local message="$1"
     local command="$2"
     local interval="${3:-3}"  # Default 3 seconds between dots
-    local timeout="${4:-300}"  # Default 5 minute timeout
+    local timeout="${4:-600}"  # Default 10 minute timeout
 
     printf "\033[34m%s\033[0m\n" "$message"
 

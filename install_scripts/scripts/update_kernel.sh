@@ -47,13 +47,13 @@ NEW_KERNEL=$(uname -r)
 print_header "Kernel Update"
 print_status "Current kernel: $CURRENT_KERNEL"
 
-show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"
+show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1" 3 600
 
 show_progress "⬆️  Installing latest kernel and security updates" \
-    "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1"
+    "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1" 5 1800
 
 show_progress "🧹 Removing old kernels" \
-    "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1"
+    "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1" 3 600
 
 NEW_KERNEL=$(dpkg -l 'linux-image-*' 2>/dev/null | awk '/^ii/ {print $2}' | sed 's/linux-image-//' | sort -V | tail -n 1)
 

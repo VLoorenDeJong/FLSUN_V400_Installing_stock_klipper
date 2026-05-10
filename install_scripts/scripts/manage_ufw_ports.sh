@@ -12,6 +12,11 @@ if [ -f "$SCRIPT_DIR/shared_utilities.sh" ]; then
 else
     # Fallback to inline functions if shared file not found (maintains compatibility)
     echo "Warning: shared_utilities.sh not found, using inline functions"
+    print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+    print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+    print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+    print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+    print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 fi
 
 # Ensure running as root

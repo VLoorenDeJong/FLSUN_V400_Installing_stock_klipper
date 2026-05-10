@@ -23,7 +23,7 @@ clean_package_cache() {
 
     # Remove corrupted package cache files
     run_privileged rm -f /var/cache/apt/*.bin
-    run_privileged rm -f /var/lib/apt/lists/*
+    run_privileged find /var/lib/apt/lists/ -maxdepth 1 -type f -delete
     run_privileged rm -f /var/lib/apt/lists/partial/*
 
     # Update package lists (quiet mode)
