@@ -1,0 +1,53 @@
+# Minecraft Server Files (should never be committed)
+libraries/
+versions/
+*.jar
+!backup_config/**/*.jar
+
+# Security: Never commit plain text passwords
+.rcon_password
+*.rcon_password
+.rcon_password.txt
+
+# SSH and Encryption Keys
+*.pem
+*.key
+*.pub
+id_rsa*
+id_ed25519*
+*.crt
+*.cert
+
+# Environment and Secrets Files
+.env
+.env.local
+.env.*.local
+.env.production.local
+.secrets
+.credentials
+
+# Backup files and images
+backup_config/backup_images/
+backup_config/backupI_mages/
+*.swp
+*.bak
+*.tmp
+
+# System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
