@@ -1,5 +1,11 @@
 # FLSUN_V400_Installing_stock_klipper
 
+## Credits
+
+- [Guilouz/Klipper-Flsun-Speeder-Pad](https://github.com/Guilouz/Klipper-Flsun-Speeder-Pad/) — FLSUN Speeder Pad Klipper configuration and installer, which this project builds upon.
+
+---
+
 ## What this does
 
 Automates the setup of stock Klipper on an FLSUN V400 Speeder Pad by running a sequence of installation scripts:
@@ -81,3 +87,4 @@ Look for `inet` under `eth0` (e.g. `2: eth0: ... inet 192.168.x.x`). Use that IP
 ```shell
 sudo apt update && sudo apt install git && git --version
 ```
+
