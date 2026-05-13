@@ -75,16 +75,19 @@ esac
 print_status "Changing login password for '$TARGET_USER'. This is the password used to log in to this server (e.g. via SSH or the console)."
 printf "\n"
 
-read_password "Enter new login password for '$TARGET_USER': " USER_PASSWORD
-read_password "Re-enter the password to confirm: " USER_PASSWORD_CONFIRM
+while true; do
+    read_password "Enter new login password for '$TARGET_USER': " USER_PASSWORD
+    read_password "Re-enter the password to confirm: " USER_PASSWORD_CONFIRM
 
-if [ "$USER_PASSWORD" != "$USER_PASSWORD_CONFIRM" ]; then
+    if [ "$USER_PASSWORD" = "$USER_PASSWORD_CONFIRM" ]; then
+        unset USER_PASSWORD_CONFIRM
+        break
+    fi
+
     unset USER_PASSWORD USER_PASSWORD_CONFIRM
-    print_error "Passwords do not match. Please run the script again."
-    exit 1
-fi
-
-unset USER_PASSWORD_CONFIRM
+    print_error "Passwords do not match. Please try again."
+    printf "\n"
+done
 
 print_status "Updating login password..."
 if printf '%s\n%s\n' "$USER_PASSWORD" "$USER_PASSWORD" | sudo passwd "$TARGET_USER" >/dev/null 2>&1; then
