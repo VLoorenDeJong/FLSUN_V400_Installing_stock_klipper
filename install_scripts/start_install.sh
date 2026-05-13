@@ -60,7 +60,6 @@ PHASE2_SCRIPTS=(
     "add_kiauh.sh"
     "start_kiauh.sh"
     "set_scripts_executable.sh"
-    "reboot.sh"
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
