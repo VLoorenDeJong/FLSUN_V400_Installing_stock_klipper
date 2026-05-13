@@ -28,9 +28,9 @@ fi
 
 chmod +x "$KIAUH_SCRIPT"
 
-if pgrep -f "[k]iauh.sh" >/dev/null 2>&1; then
+if pgrep -f "kiauh/kiauh\.sh" >/dev/null 2>&1; then
     echo -e "\e[33m⚠️ A stale KIAUH process was detected. Killing it before relaunching...\e[0m"
-    pkill -f "[k]iauh.sh" || true
+    pkill -f "kiauh/kiauh\.sh" || true
     sleep 1
 fi
 

@@ -224,6 +224,11 @@ while true; do
     echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Apache, Samba)\e[0m"
     echo -e "  \e[33m4)\e[0m Run individual script"
     echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
+    if [[ "$debugMode" -eq 1 ]]; then
+        echo -e "  \e[33md)\e[0m Debug mode  \e[32m[ON]\e[0m"
+    else
+        echo -e "  \e[33md)\e[0m Debug mode  \e[90m[off]\e[0m"
+    fi
     echo -e "  \e[33mq)\e[0m Quit"
     echo ""
     read -rp "Choice: " MAIN_CHOICE
@@ -261,6 +266,15 @@ while true; do
             echo -e "\e[33m⚠️  Phase 1 ends with a reboot. After reboot, run this script again and choose option 2.\e[0m"
             read -rp "Start Phase 1 now? [y/N]: " confirm
             [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence "${PHASE1_SCRIPTS[@]}"
+            ;;
+        d|D)
+            if [[ "$debugMode" -eq 1 ]]; then
+                debugMode=0
+                echo -e "\e[33m🔕 Debug mode disabled.\e[0m"
+            else
+                debugMode=1
+                echo -e "\e[32m🔔 Debug mode enabled. Scripts will run with bash -x.\e[0m"
+            fi
             ;;
         q|Q)
             echo -e "\e[32m👋 Goodbye!\e[0m"
