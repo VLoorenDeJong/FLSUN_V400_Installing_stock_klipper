@@ -59,6 +59,7 @@ PHASE2_SCRIPTS=(
     "add_kiauh.sh"
     "start_kiauh.sh"
     "cleanup_flsun_builds.sh"
+    "fix_pip_venvs.sh"
     "start_kiauh.sh"
 )
 
