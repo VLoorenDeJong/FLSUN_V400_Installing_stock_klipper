@@ -54,7 +54,6 @@ PHASE1_SCRIPTS=(
     "add_ufw.sh"
     "add_ssh.sh"
     "add_bash_show_branch_name.sh"
-    "set_scripts_executable.sh"
     "reboot.sh"
 )
 
