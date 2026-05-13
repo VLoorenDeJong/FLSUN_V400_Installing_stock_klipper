@@ -53,6 +53,7 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     "add_ufw.sh"
     "add_ssh.sh"
+    "add_network_manager.sh"
     "add_bash_show_branch_name.sh"
     "reboot.sh"
 )
@@ -60,18 +61,19 @@ PHASE1_SCRIPTS=(
 # Phase 2 — Remove old Flsun stack, then install fresh Klipper stack
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
-    "add_network_manager.sh"
-    "add_flsun_speeder_pad_installer.sh"
-    "add_flsun_sp_installer2.sh"
+    "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1
+    "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
-    "fix_pip_venvs.sh"
-    "start_kiauh.sh 1"            # SESSION 1: remove old Flsun packages via KIAUH
-    "fix_klipper_venv.sh"         # fix aenum + re-install klippy requirements
-    "cleanup_flsun_builds.sh"     # remove Flsun-specific dirs/configs
-    "add_klipperscreen_guilouz.sh" # install Guilouz KlipperScreen fork
-    "add_usb_symlink.sh"          # ln -s gcode_files/USB-Disk printer_data/gcodes/
-    "fix_moonraker_shutdown.sh"   # policykit rules + [machine] shutdown_action
-    "start_kiauh.sh 2"            # SESSION 2: install Klipper, Moonraker, Mainsail
+    "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
+    "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
+    "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
+    "install_python39.sh"                 # step 083.3: install python3.9 + venv
+    "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
+    "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
+    "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
+    "add_usb_symlink.sh"                  # ln -s gcode_files/USB-Disk printer_data/gcodes/
+    "fix_moonraker_shutdown.sh"           # policykit rules + [machine] shutdown_action
+    "reboot.sh"                           # final reboot to bring up all services cleanly
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
@@ -110,7 +112,7 @@ run_script() {
         updates_install_and_clean.sh|update_kernel.sh|upgrade_distro.sh|\
         add_network_manager.sh|add_flsun_speeder_pad_installer.sh|\
         add_flsun_sp_installer2.sh|add_kiauh.sh|add_webmin.sh|\
-        add_apache_webserver.sh|add_smb.sh)
+        add_apache_webserver.sh|add_smb.sh|install_python39.sh)
             run_lock_fix ;;
     esac
 
