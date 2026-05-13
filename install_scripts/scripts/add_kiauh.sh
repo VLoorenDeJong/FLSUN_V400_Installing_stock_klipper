@@ -5,6 +5,9 @@ export DEBIAN_FRONTEND=noninteractive
 
 KIAUH_REPO_URL="https://github.com/dw-0/kiauh.git"
 FORCE_REINSTALL="${FORCE_REINSTALL_KIAUH:-0}"
+# Pin to a specific tag/branch/commit by setting KIAUH_TAG.
+# Empty = latest master/main. Example: KIAUH_TAG=v5.3.0
+KIAUH_TAG="${KIAUH_TAG:-}"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo -e "\e[31m❌ This script must run with sudo/root privileges.\e[0m"
@@ -39,7 +42,12 @@ fi
 if [ -d "$KIAUH_DIR/.git" ] && [ "$FORCE_REINSTALL" != "1" ]; then
     echo -e "\e[34m🔄 Existing KIAUH clone found, updating instead of reinstalling\e[0m"
     git -C "$KIAUH_DIR" fetch --all --prune
-    git -C "$KIAUH_DIR" reset --hard origin/master || git -C "$KIAUH_DIR" reset --hard origin/main
+    if [ -n "$KIAUH_TAG" ]; then
+        echo -e "\e[34m📌 Checking out KIAUH tag/version: $KIAUH_TAG\e[0m"
+        git -C "$KIAUH_DIR" checkout "$KIAUH_TAG"
+    else
+        git -C "$KIAUH_DIR" reset --hard origin/master || git -C "$KIAUH_DIR" reset --hard origin/main
+    fi
     git -C "$KIAUH_DIR" clean -fd
     chown -R "$TARGET_USER":"$TARGET_USER" "$KIAUH_DIR"
     echo -e "\e[32m✅ KIAUH updated successfully\e[0m"
@@ -51,6 +59,11 @@ rm -rf "$KIAUH_DIR"
 
 echo -e "\e[34m📥 Cloning KIAUH into: $KIAUH_DIR\e[0m"
 git clone "$KIAUH_REPO_URL" "$KIAUH_DIR"
+
+if [ -n "$KIAUH_TAG" ]; then
+    echo -e "\e[34m📌 Checking out KIAUH tag/version: $KIAUH_TAG\e[0m"
+    git -C "$KIAUH_DIR" checkout "$KIAUH_TAG"
+fi
 
 echo -e "\e[34m🔐 Fixing ownership for user: $TARGET_USER\e[0m"
 chown -R "$TARGET_USER":"$TARGET_USER" "$KIAUH_DIR"

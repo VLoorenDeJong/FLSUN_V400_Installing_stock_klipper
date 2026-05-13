@@ -6,6 +6,14 @@
 
 debugMode=0
 
+# -----------------------------------------------------------------------------
+# KIAUH version pin (optional)
+# Leave empty to use the latest master. Set to a tag, branch, or commit SHA
+# to pin to a specific version. Example: "v5.3.0" or "v4.2.1"
+# Override with:  KIAUH_TAG=v5.3.0 sudo bash start_install.sh
+# -----------------------------------------------------------------------------
+export KIAUH_TAG="${KIAUH_TAG:-}"
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -50,26 +58,29 @@ PHASE1_SCRIPTS=(
     "reboot.sh"
 )
 
-# Phase 2 — Klipper stack (required steps, run in order)
+# Phase 2 — Remove old Flsun stack, then install fresh Klipper stack
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
     "add_network_manager.sh"
     "add_flsun_speeder_pad_installer.sh"
     "add_flsun_sp_installer2.sh"
     "add_kiauh.sh"
-    "start_kiauh.sh"
-    "cleanup_flsun_builds.sh"
     "fix_pip_venvs.sh"
-    "start_kiauh.sh"
+    "start_kiauh.sh 1"            # SESSION 1: remove old Flsun packages via KIAUH
+    "fix_klipper_venv.sh"         # fix aenum + re-install klippy requirements
+    "cleanup_flsun_builds.sh"     # remove Flsun-specific dirs/configs
+    "add_klipperscreen_guilouz.sh" # install Guilouz KlipperScreen fork
+    "add_usb_symlink.sh"          # ln -s gcode_files/USB-Disk printer_data/gcodes/
+    "fix_moonraker_shutdown.sh"   # policykit rules + [machine] shutdown_action
+    "start_kiauh.sh 2"            # SESSION 2: install Klipper, Moonraker, Mainsail
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
 declare -A OPTIONAL_LABELS=(
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
-    ["add_apache_webserver.sh"]="Apache  (web server)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
 )
-OPTIONAL_ORDER=("add_webmin.sh" "add_apache_webserver.sh" "add_smb.sh")
+OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -86,6 +97,8 @@ run_lock_fix() {
 
 run_script() {
     local script_name="$1"
+    shift
+    local script_args=("$@")   # any extra arguments are passed to the child script
     local script_path="$INSTALL_DIR/$script_name"
 
     if [[ ! -f "$script_path" ]]; then
@@ -111,7 +124,7 @@ run_script() {
     local tty_src="/dev/tty"
     [[ ! -r /dev/tty ]] && tty_src="/dev/stdin"
 
-    if $run_cmd "$script_path" <"$tty_src"; then
+    if $run_cmd "$script_path" "${script_args[@]}" <"$tty_src"; then
         echo -e "\e[32m✅ Finished: $script_name\e[0m"
         echo ""
         return 0
@@ -128,13 +141,17 @@ run_sequence() {
     local scripts=("$@")
     local all_ok=true
 
-    for script in "${scripts[@]}"; do
+    for script_entry in "${scripts[@]}"; do
+        # Split entry into script name + optional args
+        read -ra parts <<< "$script_entry"
+        local script="${parts[0]}"
+        local extra_args=("${parts[@]:1}")
         # Skip reboot if previous steps failed
         if [[ "$script" == "reboot.sh" && "$all_ok" == "false" ]]; then
             echo -e "\e[33m⏭️  Skipping reboot — previous steps failed\e[0m"
             continue
         fi
-        run_script "$script" || all_ok=false
+        run_script "$script" "${extra_args[@]}" || all_ok=false
     done
 
     if $all_ok; then
@@ -163,9 +180,8 @@ optional_checklist() {
         echo "  n) Select none"
         echo "  Enter) Confirm and continue"
         echo ""
-        read -rp "Choice: " opt
+        read -rp "Choice: " opt </dev/tty
         case "$opt" in
-            a) for i in "${!toggles[@]}"; do toggles[$i]="on"; done ;;
             n) for i in "${!toggles[@]}"; do toggles[$i]="off"; done ;;
             "") break ;;
             [0-9]*)
@@ -199,13 +215,13 @@ menu_individual() {
         done
         echo "   b) Back"
         echo ""
-        read -rp "Choice: " opt
+        read -rp "Choice: " opt </dev/tty
         [[ "$opt" == "b" ]] && break
         if [[ "$opt" =~ ^[0-9]+$ ]]; then
             local idx=$((opt-1))
             if [[ $idx -ge 0 && $idx -lt ${#all_scripts[@]} ]]; then
                 run_script "${all_scripts[$idx]}"
-                read -rp "Press Enter to continue..." _
+                read -rp "Press Enter to continue..." _ </dev/tty
             else
                 echo -e "\e[33m⚠️  Invalid number\e[0m"
             fi
@@ -227,7 +243,7 @@ while true; do
     echo ""
     echo -e "  \e[33m1)\e[0m Phase 1 — OS prep + distro upgrade  \e[90m(ends with reboot)\e[0m"
     echo -e "  \e[33m2)\e[0m Phase 2 — Klipper/Mainsail/Moonraker/KlipperScreen + optional extras"
-    echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Apache, Samba)\e[0m"
+    echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Samba)\e[0m"
     echo -e "  \e[33m4)\e[0m Run individual script"
     echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
     if [[ "$debugMode" -eq 1 ]]; then
@@ -237,7 +253,7 @@ while true; do
     fi
     echo -e "  \e[33mq)\e[0m Quit"
     echo ""
-    read -rp "Choice: " MAIN_CHOICE || { echo -e "\n\e[32m👋 Goodbye!\e[0m"; exit 0; }
+    read -rp "Choice: " MAIN_CHOICE </dev/tty || { echo -e "\n\e[32m👋 Goodbye!\e[0m"; exit 0; }
 
     case "$MAIN_CHOICE" in
         1)
@@ -246,12 +262,13 @@ while true; do
             ;;
         2)
             echo -e "\n\e[36m=== Phase 2 — Klipper Stack ===\e[0m"
-            # Ask about optional extras first
             echo -e "\nSelect optional extras to install after the required Phase 2 steps:"
             optional_checklist
+
             run_sequence "${PHASE2_SCRIPTS[@]}"
+
             if [[ ${#SELECTED[@]} -gt 0 ]]; then
-                echo -e "\e[36m--- Running selected optional extras ---\e[0m"
+                echo -e "\e[36m─── Running selected optional extras ───\e[0m"
                 run_sequence "${SELECTED[@]}"
             fi
             ;;
@@ -270,7 +287,7 @@ while true; do
         5)
             echo -e "\n\e[36m=== Full Install: Phase 1 + Phase 2 ===\e[0m"
             echo -e "\e[33m⚠️  Phase 1 ends with a reboot. After reboot, run this script again and choose option 2.\e[0m"
-            read -rp "Start Phase 1 now? [y/N]: " confirm
+            read -rp "Start Phase 1 now? [y/N]: " confirm </dev/tty
             [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence "${PHASE1_SCRIPTS[@]}"
             ;;
         d|D)
