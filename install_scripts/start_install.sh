@@ -56,10 +56,10 @@ PHASE2_SCRIPTS=(
     "add_network_manager.sh"
     "add_flsun_speeder_pad_installer.sh"
     "add_flsun_sp_installer2.sh"
-    "cleanup_flsun_builds.sh"
     "add_kiauh.sh"
     "start_kiauh.sh"
-    "set_scripts_executable.sh"
+    "cleanup_flsun_builds.sh"
+    "start_kiauh.sh"
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
