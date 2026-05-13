@@ -105,7 +105,12 @@ run_script() {
     local run_cmd="bash"
     [[ "$debugMode" -eq 1 ]] && run_cmd="bash -x"
 
-    if $run_cmd "$script_path"; then
+    # Redirect stdin from /dev/tty so child scripts read from the terminal
+    # directly and cannot exhaust the parent script's stdin.
+    local tty_src="/dev/tty"
+    [[ ! -r /dev/tty ]] && tty_src="/dev/stdin"
+
+    if $run_cmd "$script_path" <"$tty_src"; then
         echo -e "\e[32m✅ Finished: $script_name\e[0m"
         echo ""
         return 0
@@ -231,7 +236,7 @@ while true; do
     fi
     echo -e "  \e[33mq)\e[0m Quit"
     echo ""
-    read -rp "Choice: " MAIN_CHOICE
+    read -rp "Choice: " MAIN_CHOICE || { echo -e "\n\e[32m👋 Goodbye!\e[0m"; exit 0; }
 
     case "$MAIN_CHOICE" in
         1)
