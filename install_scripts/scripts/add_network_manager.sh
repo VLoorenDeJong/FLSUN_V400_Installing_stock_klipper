@@ -93,13 +93,66 @@ sudo systemctl -q stop dhcpcd 2>/dev/null || true
 
 print_status "Enabling NetworkManager service..."
 sudo systemctl enable NetworkManager
-sudo systemctl -q --no-block start NetworkManager
+sudo systemctl start NetworkManager
 print_success "NetworkManager enabled and started."
 
-# Step 4: Prompt for WiFi credentials and connect
+# Step 3.5: Auto-migrate existing WiFi credentials from wpa_supplicant
+print_header "Migrating existing WiFi configuration"
+WPA_CONF=""
+for _f in /etc/wpa_supplicant/wpa_supplicant-wlan0.conf \
+           /etc/wpa_supplicant/wpa_supplicant.conf; do
+    [[ -f "$_f" ]] && WPA_CONF="$_f" && break
+done
+
+if [[ -n "$WPA_CONF" ]]; then
+    print_status "Found: $WPA_CONF"
+    # Give NetworkManager a moment to fully initialise
+    sleep 3
+
+    WPA_SSID=$(grep -oP '(?<=ssid=")[^"]+' "$WPA_CONF" | head -1)
+    # Quoted PSK = plaintext password; unquoted 64-char hex = raw hash — both accepted by nmcli
+    WPA_PSK=$(grep -oP '(?<=psk=")[^"]+' "$WPA_CONF" | head -1)
+    [[ -z "$WPA_PSK" ]] && \
+        WPA_PSK=$(awk '/^\s*psk=[^"]/{sub(/^\s*psk=[ \t]*/, ""); print; exit}' "$WPA_CONF")
+
+    if [[ -n "$WPA_SSID" ]]; then
+        if nmcli -t -f NAME connection show | grep -qF "migrated-wifi"; then
+            print_warning "Migrated WiFi connection already exists — skipping."
+        elif [[ -n "$WPA_PSK" ]]; then
+            print_status "Migrating WiFi connection: '$WPA_SSID'"
+            if nmcli connection add \
+                    type wifi \
+                    con-name "migrated-wifi" \
+                    ssid "$WPA_SSID" \
+                    wifi-sec.key-mgmt wpa-psk \
+                    wifi-sec.psk "$WPA_PSK" \
+                    connection.autoconnect yes \
+                    connection.autoconnect-priority 10 2>/dev/null; then
+                print_success "WiFi '$WPA_SSID' migrated — will auto-connect after reboot."
+            else
+                print_warning "nmcli migration failed. You may need to reconnect WiFi manually after reboot."
+            fi
+        else
+            print_warning "SSID '$WPA_SSID' found but no PSK — manual reconnect required after reboot."
+        fi
+    else
+        print_warning "Could not parse SSID from $WPA_CONF — manual reconnect required after reboot."
+    fi
+else
+    print_warning "No wpa_supplicant config found — WiFi auto-migration skipped."
+    print_warning "If you lose WiFi after reboot, reconnect with:"
+    print_warning "  nmcli device wifi connect \"<SSID>\" password \"<PASSWORD>\""
+fi
+
+# Step 4: Prompt for WiFi credentials and connect (skip if migration already succeeded)
 print_header "Connect to WiFi via NetworkManager"
-read -rp "Do you want to connect to a WiFi network now? (y/N): " CONNECT_WIFI
-printf "\n"
+if nmcli -t -f NAME connection show | grep -qF "migrated-wifi"; then
+    print_success "Skipping manual WiFi setup — credentials were migrated from wpa_supplicant."
+    CONNECT_WIFI="n"
+else
+    read -rp "Do you want to connect to a WiFi network now? (y/N): " CONNECT_WIFI
+    printf "\n"
+fi
 
 if [[ "${CONNECT_WIFI,,}" != "y" ]]; then
     print_warning "Skipping WiFi connection. You can connect manually later with:"

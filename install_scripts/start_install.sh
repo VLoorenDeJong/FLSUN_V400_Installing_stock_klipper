@@ -45,6 +45,7 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 PHASE1_SCRIPTS=(
     "cleanup_repositories.sh"
     "fix_xauthority.sh"
+    "preserve_wifi_settings.sh"
     "set_scripts_executable.sh"
     "update_user_password.sh"
     "updates_install_and_clean.sh"
@@ -53,7 +54,6 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     "add_ufw.sh"
     "add_ssh.sh"
-    "add_network_manager.sh"
     "add_bash_show_branch_name.sh"
     "reboot.sh"
 )
@@ -61,6 +61,7 @@ PHASE1_SCRIPTS=(
 # Phase 2 — Remove old Flsun stack, then install fresh Klipper stack
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
+    "preserve_wifi_settings.sh"           # ensure WiFi survives the reboot
     "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
@@ -183,6 +184,7 @@ optional_checklist() {
         echo ""
         read -rp "Choice: " opt </dev/tty
         case "$opt" in
+            a) for i in "${!toggles[@]}"; do toggles[$i]="on"; done ;;
             n) for i in "${!toggles[@]}"; do toggles[$i]="off"; done ;;
             "") break ;;
             [0-9]*)
@@ -199,6 +201,19 @@ optional_checklist() {
     for i in "${!OPTIONAL_ORDER[@]}"; do
         [[ "${toggles[$i]}" == "on" ]] && SELECTED+=("${OPTIONAL_ORDER[$i]}")
     done
+}
+
+# Build and run a sequence, injecting add_network_manager.sh before reboot.sh
+# when the installNetworkManager toggle is on.
+run_sequence_with_flags() {
+    local result=()
+    for s in "$@"; do
+        if [[ "$s" == "reboot.sh" && "$installNetworkManager" -eq 1 ]]; then
+            result+=("add_network_manager.sh")
+        fi
+        result+=("$s")
+    done
+    run_sequence "${result[@]}"
 }
 
 # Individual scripts submenu
@@ -248,9 +263,14 @@ while true; do
     echo -e "  \e[33m4)\e[0m Run individual script"
     echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
     if [[ "$debugMode" -eq 1 ]]; then
-        echo -e "  \e[33md)\e[0m Debug mode  \e[32m[ON]\e[0m"
+        echo -e "  \e[33md)\e[0m Debug mode          \e[32m[ON]\e[0m"
     else
-        echo -e "  \e[33md)\e[0m Debug mode  \e[90m[off]\e[0m"
+        echo -e "  \e[33md)\e[0m Debug mode          \e[90m[off]\e[0m"
+    fi
+    if [[ "$installNetworkManager" -eq 1 ]]; then
+        echo -e "  \e[33mn)\e[0m NetworkManager      \e[32m[ON]\e[0m  \e[90m(replaces dhcpcd — may cause WiFi instability)\e[0m"
+    else
+        echo -e "  \e[33mn)\e[0m NetworkManager      \e[90m[off]\e[0m"
     fi
     echo -e "  \e[33mq)\e[0m Quit"
     echo ""
@@ -259,14 +279,14 @@ while true; do
     case "$MAIN_CHOICE" in
         1)
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
-            run_sequence "${PHASE1_SCRIPTS[@]}"
+            run_sequence_with_flags "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
             echo -e "\n\e[36m=== Phase 2 — Klipper Stack ===\e[0m"
             echo -e "\nSelect optional extras to install after the required Phase 2 steps:"
             optional_checklist
 
-            run_sequence "${PHASE2_SCRIPTS[@]}"
+            run_sequence_with_flags "${PHASE2_SCRIPTS[@]}"
 
             if [[ ${#SELECTED[@]} -gt 0 ]]; then
                 echo -e "\e[36m─── Running selected optional extras ───\e[0m"
@@ -289,7 +309,7 @@ while true; do
             echo -e "\n\e[36m=== Full Install: Phase 1 + Phase 2 ===\e[0m"
             echo -e "\e[33m⚠️  Phase 1 ends with a reboot. After reboot, run this script again and choose option 2.\e[0m"
             read -rp "Start Phase 1 now? [y/N]: " confirm </dev/tty
-            [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence "${PHASE1_SCRIPTS[@]}"
+            [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence_with_flags "${PHASE1_SCRIPTS[@]}"
             ;;
         d|D)
             if [[ "$debugMode" -eq 1 ]]; then
@@ -298,6 +318,16 @@ while true; do
             else
                 debugMode=1
                 echo -e "\e[32m🔔 Debug mode enabled. Scripts will run with bash -x.\e[0m"
+            fi
+            ;;
+        n|N)
+            if [[ "$installNetworkManager" -eq 1 ]]; then
+                installNetworkManager=0
+                echo -e "\e[33m🔕 NetworkManager disabled — dhcpcd will be used.\e[0m"
+            else
+                installNetworkManager=1
+                echo -e "\e[32m🔔 NetworkManager enabled — will install before reboot.\e[0m"
+                echo -e "\e[33m⚠️  This replaces dhcpcd and may cause WiFi instability.\e[0m"
             fi
             ;;
         q|Q)
