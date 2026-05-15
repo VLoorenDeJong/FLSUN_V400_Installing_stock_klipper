@@ -60,9 +60,10 @@ PHASE1_SCRIPTS=(
 
 # Phase 2 — Remove old Flsun stack, then install fresh Klipper stack
 PHASE2_SCRIPTS=(
+    "restore_nm_settings.sh"              # on re-run after sp_installer1 reboot: restore WiFi
     "cleanup_repositories.sh"
-    "preserve_wifi_settings.sh"           # ensure WiFi survives the reboot
-    "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1
+    "preserve_nm_settings.sh"             # backup NM profiles before sp_installer1 reboots
+    "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1 (reboots!)
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
