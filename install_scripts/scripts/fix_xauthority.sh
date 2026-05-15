@@ -147,7 +147,7 @@ if xauth list >/dev/null 2>&1; then
     echo -e "\e[32m✅ X11 applications should now work properly.\e[0m"
 else
     # Check what the error is now
-    local error_output=$(xauth list 2>&1)
+    error_output=$(xauth list 2>&1)
     if echo "$error_output" | grep -q "does not exist"; then
         echo -e "\e[31m❌ Xauthority file issue persists.\e[0m"
         exit 1
