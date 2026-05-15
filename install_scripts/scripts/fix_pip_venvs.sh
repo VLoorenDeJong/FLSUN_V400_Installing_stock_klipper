@@ -22,6 +22,8 @@ print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
+had_issues=false
+
 if [ "$(id -u)" -ne 0 ]; then
     print_error "This script must run with sudo/root privileges."
     exit 1
@@ -41,8 +43,14 @@ print_warning "Patching ensurepip so all new venvs get a working pip."
 # --- Step 1: find ensurepip bundled wheel directory ---
 BUNDLED_DIR=$(python3 -c "import ensurepip, os; print(os.path.join(ensurepip.__path__[0], '_bundled'))" 2>/dev/null || true)
 
+# Fallback for distros where ensurepip path cannot be resolved via Python.
+if [ -z "$BUNDLED_DIR" ] || [ ! -d "$BUNDLED_DIR" ]; then
+    BUNDLED_DIR=$(find /usr/lib /usr/local/lib -type d -path "*/python*/ensurepip/_bundled" 2>/dev/null | sort -V | head -1 || true)
+fi
+
 if [ -z "$BUNDLED_DIR" ] || [ ! -d "$BUNDLED_DIR" ]; then
     print_warning "Could not locate ensurepip bundled directory — skipping ensurepip patch."
+    had_issues=true
 else
     OLD_PIP_WHEEL=$(find "$BUNDLED_DIR" -name "pip-*.whl" | sort -V | tail -1)
     if [ -n "$OLD_PIP_WHEEL" ]; then
@@ -70,9 +78,11 @@ else
             print_warning "Backup saved as: ${OLD_PIP_WHEEL}.bak"
         else
             print_warning "Downloaded wheel not found — ensurepip patch skipped."
+            had_issues=true
         fi
     else
         print_warning "pip download failed (no internet?) — ensurepip patch skipped."
+        had_issues=true
     fi
 fi
 
@@ -91,8 +101,27 @@ VENV_DIRS=(
 
 any_upgraded=false
 for venv in "${VENV_DIRS[@]}"; do
+    py_bin="${venv}/bin/python"
     pip_bin="${venv}/bin/pip"
-    if [ -f "$pip_bin" ]; then
+
+    if [ -x "$py_bin" ]; then
+        print_status "Upgrading pip in: $(basename "$venv")..."
+
+        # Recover venvs where pip entrypoint exists but pip module is missing.
+        if ! sudo -u "$TARGET_USER" "$py_bin" -m pip --version >/dev/null 2>&1; then
+            print_warning "pip module missing in $(basename "$venv") — attempting ensurepip bootstrap"
+            sudo -u "$TARGET_USER" "$py_bin" -m ensurepip --upgrade --default-pip >/dev/null 2>&1 || true
+        fi
+
+        if sudo -u "$TARGET_USER" "$py_bin" -m pip install --upgrade pip --quiet; then
+            new_ver=$(sudo -u "$TARGET_USER" "$py_bin" -m pip --version 2>/dev/null | awk '{print $2}')
+            print_success "pip → $new_ver in $(basename "$venv")"
+            any_upgraded=true
+        else
+            print_warning "pip upgrade failed in $venv — continuing anyway"
+            had_issues=true
+        fi
+    elif [ -x "$pip_bin" ]; then
         print_status "Upgrading pip in: $(basename "$venv")..."
         if sudo -u "$TARGET_USER" "$pip_bin" install --upgrade pip --quiet; then
             new_ver=$(sudo -u "$TARGET_USER" "$pip_bin" --version 2>/dev/null | awk '{print $2}')
@@ -100,6 +129,7 @@ for venv in "${VENV_DIRS[@]}"; do
             any_upgraded=true
         else
             print_warning "pip upgrade failed in $venv — continuing anyway"
+            had_issues=true
         fi
     fi
 done
@@ -115,11 +145,19 @@ fi
 print_header "Fix setuptools for Klipper venv (step 510)"
 print_warning "Pinning system setuptools to 59.6.0 to prevent Klipper venv creation failure."
 
-if pip3 install --quiet setuptools==59.6.0 2>/dev/null || \
+# Ensure python3 has a working pip module first.
+if ! python3 -m pip --version >/dev/null 2>&1; then
+    python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
+fi
+
+if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 2>/dev/null || \
+   python3 -m pip install --quiet setuptools==59.6.0 2>/dev/null || \
+   pip3 install --quiet setuptools==59.6.0 2>/dev/null || \
    pip install --quiet setuptools==59.6.0 2>/dev/null; then
     print_success "setuptools pinned to 59.6.0"
 else
     print_warning "setuptools pin failed — continuing anyway (may cause Klipper venv issues)"
+    had_issues=true
 fi
 
 # Set SETUPTOOLS_USE_DISTUTILS=stdlib persistently so KIAUH's virtualenv call picks it up
@@ -135,3 +173,7 @@ fi
 export SETUPTOOLS_USE_DISTUTILS=stdlib
 
 print_success "pip + setuptools fix complete."
+
+if [ "$had_issues" = true ]; then
+    print_warning "Completed with warnings. Re-run this script after internet and Python/pip packages are healthy."
+fi
