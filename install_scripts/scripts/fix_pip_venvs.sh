@@ -50,6 +50,7 @@ fi
 
 if [ -z "$BUNDLED_DIR" ] || [ ! -d "$BUNDLED_DIR" ]; then
     print_warning "Could not locate ensurepip bundled directory — skipping ensurepip patch."
+    print_warning "Some distro Python builds omit ensurepip wheels; venv-level pip upgrades are still applied below."
     had_issues=true
 else
     OLD_PIP_WHEEL=$(find "$BUNDLED_DIR" -name "pip-*.whl" | sort -V | tail -1)
@@ -150,15 +151,23 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
     python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
 fi
 
-if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 2>/dev/null || \
-   python3 -m pip install --quiet setuptools==59.6.0 2>/dev/null || \
-   pip3 install --quiet setuptools==59.6.0 2>/dev/null || \
-   pip install --quiet setuptools==59.6.0 2>/dev/null; then
+SETUPTOOLS_LOG=$(mktemp)
+
+if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
+   python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
+   pip3 install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
+   pip install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG"; then
     print_success "setuptools pinned to 59.6.0"
 else
     print_warning "setuptools pin failed — continuing anyway (may cause Klipper venv issues)"
+    if [ -s "$SETUPTOOLS_LOG" ]; then
+        print_warning "setuptools pin error (last lines):"
+        tail -n 6 "$SETUPTOOLS_LOG"
+    fi
     had_issues=true
 fi
+
+rm -f "$SETUPTOOLS_LOG"
 
 # Set SETUPTOOLS_USE_DISTUTILS=stdlib persistently so KIAUH's virtualenv call picks it up
 ENV_FILE="/etc/environment"
