@@ -152,17 +152,25 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
 fi
 
 SETUPTOOLS_LOG=$(mktemp)
+setuptools_pinned=false
 
-if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
-   python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
-   pip3 install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG" || \
-   pip install --quiet setuptools==59.6.0 > /dev/null 2>"$SETUPTOOLS_LOG"; then
+if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+elif python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+elif command -v pip3 >/dev/null 2>&1 && pip3 install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+elif command -v pip >/dev/null 2>&1 && pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+fi
+
+if [ "$setuptools_pinned" = true ]; then
     print_success "setuptools pinned to 59.6.0"
 else
     print_warning "setuptools pin failed — continuing anyway (may cause Klipper venv issues)"
     if [ -s "$SETUPTOOLS_LOG" ]; then
         print_warning "setuptools pin error (last lines):"
-        tail -n 6 "$SETUPTOOLS_LOG"
+        tail -n 20 "$SETUPTOOLS_LOG"
     fi
     had_issues=true
 fi
