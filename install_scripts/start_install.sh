@@ -6,6 +6,9 @@
 
 debugMode=0
 installNetworkManager=0
+overrideMode=0
+
+STATE_DIR="/var/lib/linuxsetups"
 
 # -----------------------------------------------------------------------------
 # KIAUH version pin (optional)
@@ -59,12 +62,16 @@ PHASE1_SCRIPTS=(
     "reboot.sh"
 )
 
-# Phase 2 — Prepare system for manual KIAUH sessions
+# Phase 2 — Flsun sp_installer1 prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
-    "restore_nm_settings.sh"              # on re-run after sp_installer1 reboot: restore WiFi
+    "restore_nm_settings.sh"              # re-run after Phase 1 reboot: restore WiFi
     "cleanup_repositories.sh"
     "preserve_nm_settings.sh"             # backup NM profiles before sp_installer1 reboots
-    "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1 (reboots!)
+    "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
+)
+
+# Phase 3 — Post-sp_installer1 reboot: prepare for manual KIAUH sessions
+PHASE3_SCRIPTS=(
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
     "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
@@ -218,6 +225,42 @@ run_sequence_with_flags() {
     run_sequence "${result[@]}"
 }
 
+# =============================================================================
+# PHASE STATE TRACKING
+# =============================================================================
+
+phase_done() { [[ -f "$STATE_DIR/phase${1}.done" ]]; }
+
+mark_phase_done() {
+    mkdir -p "$STATE_DIR"
+    touch "$STATE_DIR/phase${1}.done"
+    echo -e "\e[32m✅ Phase $1 marked as complete.\e[0m"
+}
+
+# Print one menu line for a numbered phase, showing ✅ if completed
+phase_label() {
+    local n="$1" label="$2"
+    if phase_done "$n"; then
+        echo -e "  \e[33m${n})\e[0m \e[32m✅\e[0m  ${label}  \e[90m(completed)\e[0m"
+    else
+        echo -e "  \e[33m${n})\e[0m  ○  ${label}"
+    fi
+}
+
+# Run a numbered phase; blocks re-run unless overrideMode=1; marks done on full success
+run_phase() {
+    local phase_num="$1"; shift
+    if phase_done "$phase_num" && [[ "$overrideMode" -eq 0 ]]; then
+        echo -e "\e[32m✅ Phase $phase_num already completed.\e[0m"
+        echo -e "\e[33m   Enable override mode (o) to re-run.\e[0m"
+        return 0
+    fi
+    run_sequence_with_flags "$@"
+    local result=$?
+    [[ $result -eq 0 ]] && mark_phase_done "$phase_num"
+    return $result
+}
+
 # Individual scripts submenu
 menu_individual() {
     local all_scripts=()
@@ -259,45 +302,59 @@ while true; do
     echo -e "\e[36m║   FLSUN V400 Speeder Pad — Installation Menu     ║\e[0m"
     echo -e "\e[36m╚══════════════════════════════════════════════════╝\e[0m"
     echo ""
-    echo -e "  \e[33m1)\e[0m Phase 1 — OS prep + distro upgrade  \e[90m(ends with reboot)\e[0m"
-    echo -e "  \e[33m2)\e[0m Phase 2 — Prep for manual KIAUH sessions + optional extras"
-    echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Samba)\e[0m"
-    echo -e "  \e[33m4)\e[0m Run individual script"
-    echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
+    phase_label 1 "Phase 1 — OS prep + distro upgrade      (ends with reboot)"
+    phase_label 2 "Phase 2 — Flsun sp_installer1 prep      (ends with reboot)"
+    phase_label 3 "Phase 3 — Post-reboot: KIAUH prep + tools"
+    echo -e "  \e[33m4)\e[0m  Optional extras only  \e[90m(Webmin, Samba)\e[0m"
+    echo -e "  \e[33m5)\e[0m  Run individual script"
+    echo -e "  \e[33m6)\e[0m  Full install  \e[90m(Phase 1 \u2192 2 \u2192 3, reboots in between)\e[0m"
     if [[ "$debugMode" -eq 1 ]]; then
-        echo -e "  \e[33md)\e[0m Debug mode          \e[32m[ON]\e[0m"
+        echo -e "  \e[33md)\e[0m  Debug mode          \e[32m[ON]\e[0m"
     else
-        echo -e "  \e[33md)\e[0m Debug mode          \e[90m[off]\e[0m"
+        echo -e "  \e[33md)\e[0m  Debug mode          \e[90m[off]\e[0m"
     fi
     if [[ "$installNetworkManager" -eq 1 ]]; then
-        echo -e "  \e[33mn)\e[0m NetworkManager      \e[32m[ON]\e[0m  \e[90m(replaces dhcpcd — may cause WiFi instability)\e[0m"
+        echo -e "  \e[33mn)\e[0m  NetworkManager      \e[32m[ON]\e[0m  \e[90m(replaces dhcpcd — may cause WiFi instability)\e[0m"
     else
-        echo -e "  \e[33mn)\e[0m NetworkManager      \e[90m[off]\e[0m"
+        echo -e "  \e[33mn)\e[0m  NetworkManager      \e[90m[off]\e[0m"
     fi
-    echo -e "  \e[33mq)\e[0m Quit"
+    if [[ "$overrideMode" -eq 1 ]]; then
+        echo -e "  \e[33mo)\e[0m  Override completed  \e[32m[ON]\e[0m  \e[90m(allows re-running completed phases)\e[0m"
+    else
+        echo -e "  \e[33mo)\e[0m  Override completed  \e[90m[off]\e[0m"
+    fi
+    echo -e "  \e[33mq)\e[0m  Quit"
     echo ""
     read -rp "Choice: " MAIN_CHOICE </dev/tty || { echo -e "\n\e[32m👋 Goodbye!\e[0m"; exit 0; }
 
     case "$MAIN_CHOICE" in
         1)
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
-            run_sequence_with_flags "${PHASE1_SCRIPTS[@]}"
+            run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
-            echo -e "\n\e[36m=== Phase 2 — Klipper Prep (manual KIAUH) ===\e[0m"
-            echo -e "\nSelect optional extras to install after the required Phase 2 steps:"
+            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 Prep ===\e[0m"
+            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1). Run Phase 3 after reboot.\e[0m"
+            read -rp "Continue? [y/N]: " confirm </dev/tty
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                run_phase 2 "${PHASE2_SCRIPTS[@]}"
+            fi
+            ;;
+        3)
+            echo -e "\n\e[36m=== Phase 3 — Post-reboot KIAUH Prep ===\e[0m"
+            echo -e "\nSelect optional extras to install after the Phase 3 steps:"
             optional_checklist
 
-            echo -e "\e[33m⚠️  KIAUH install/remove steps are currently manual (commented out in PHASE2_SCRIPTS).\e[0m"
+            echo -e "\e[33m⚠️  KIAUH install/remove steps are currently manual (commented out in PHASE3_SCRIPTS).\e[0m"
 
-            run_sequence_with_flags "${PHASE2_SCRIPTS[@]}"
+            run_phase 3 "${PHASE3_SCRIPTS[@]}"
 
             if [[ ${#SELECTED[@]} -gt 0 ]]; then
                 echo -e "\e[36m─── Running selected optional extras ───\e[0m"
                 run_sequence "${SELECTED[@]}"
             fi
             ;;
-        3)
+        4)
             echo -e "\n\e[36m=== Optional Extras ===\e[0m"
             optional_checklist
             if [[ ${#SELECTED[@]} -gt 0 ]]; then
@@ -306,14 +363,14 @@ while true; do
                 echo -e "\e[33m⚠️  Nothing selected.\e[0m"
             fi
             ;;
-        4)
+        5)
             menu_individual
             ;;
-        5)
-            echo -e "\n\e[36m=== Full Install: Phase 1 + Phase 2 ===\e[0m"
-            echo -e "\e[33m⚠️  Phase 1 ends with a reboot. After reboot, run this script again and choose option 2.\e[0m"
+        6)
+            echo -e "\n\e[36m=== Full Install: Phase 1 + 2 + 3 ===\e[0m"
+            echo -e "\e[33m⚠️  Phase 1 and Phase 2 each end with a reboot. After each reboot, re-run this script and choose the next phase.\e[0m"
             read -rp "Start Phase 1 now? [y/N]: " confirm </dev/tty
-            [[ "$confirm" =~ ^[Yy]$ ]] && run_sequence_with_flags "${PHASE1_SCRIPTS[@]}"
+            [[ "$confirm" =~ ^[Yy]$ ]] && run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         d|D)
             if [[ "$debugMode" -eq 1 ]]; then
@@ -332,6 +389,15 @@ while true; do
                 installNetworkManager=1
                 echo -e "\e[32m🔔 NetworkManager enabled — will install before reboot.\e[0m"
                 echo -e "\e[33m⚠️  This replaces dhcpcd and may cause WiFi instability.\e[0m"
+            fi
+            ;;
+        o|O)
+            if [[ "$overrideMode" -eq 1 ]]; then
+                overrideMode=0
+                echo -e "\e[33m🔒 Override disabled — completed phases are protected.\e[0m"
+            else
+                overrideMode=1
+                echo -e "\e[32m🔓 Override enabled — completed phases can be re-run.\e[0m"
             fi
             ;;
         q|Q)
