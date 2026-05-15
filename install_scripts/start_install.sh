@@ -70,12 +70,12 @@ PHASE2_SCRIPTS=(
     "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
     "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
     "install_python39.sh"                 # step 083.3: install python3.9 + venv
-    "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
-    "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
-    "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
-    "add_usb_symlink.sh"                  # ln -s gcode_files/USB-Disk printer_data/gcodes/
-    "fix_moonraker_shutdown.sh"           # policykit rules + [machine] shutdown_action
-    "reboot.sh"                           # final reboot to bring up all services cleanly
+    # "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
+    # "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
+    # "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
+    # "add_usb_symlink.sh"                  # ln -s gcode_files/USB-Disk printer_data/gcodes/
+    # "fix_moonraker_shutdown.sh"           # policykit rules + [machine] shutdown_action
+    # "reboot.sh"                           # final reboot to bring up all services cleanly
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
