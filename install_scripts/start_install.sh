@@ -52,7 +52,7 @@ PHASE1_SCRIPTS=(
     "update_kernel.sh"
     "upgrade_distro.sh"
     "configure_locale_and_wifi_country.sh"
-    "add_ufw.sh"
+    # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules
     "add_ssh.sh"
     "add_bash_show_branch_name.sh"
     "reboot.sh"
