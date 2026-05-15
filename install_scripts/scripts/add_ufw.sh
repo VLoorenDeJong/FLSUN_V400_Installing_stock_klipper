@@ -135,6 +135,8 @@ else
         update-alternatives --display iptables 2>/dev/null || true
         update-alternatives --display ip6tables 2>/dev/null || true
         "$UFW_BIN" status verbose 2>/dev/null || true
-        exit 1
+        echo -e "\e[33m⚠️  Continuing without an active UFW firewall so the installer can finish.\e[0m"
+        echo -e "\e[33m💡 UFW can be revisited later if the kernel/firewall stack is fixed.\e[0m"
+        exit 0
     fi
 fi
