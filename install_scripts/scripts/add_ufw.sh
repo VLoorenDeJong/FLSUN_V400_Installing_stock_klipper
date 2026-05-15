@@ -80,6 +80,34 @@ force_nft_backend() {
     return $changed
 }
 
+load_netfilter_modules() {
+    local modules=(
+        nf_tables
+        nf_conntrack
+        nft_chain_nat
+        ip_tables
+        ip6_tables
+        iptable_filter
+        ip6table_filter
+        xt_conntrack
+    )
+
+    if ! command -v modprobe >/dev/null 2>&1; then
+        apt-get install -y -qq kmod >/dev/null 2>&1 || true
+    fi
+
+    if ! command -v modprobe >/dev/null 2>&1; then
+        return 1
+    fi
+
+    local module
+    for module in "${modules[@]}"; do
+        modprobe "$module" >/dev/null 2>&1 || true
+    done
+
+    return 0
+}
+
 # Install UFW if not present
 if ! command -v "$UFW_BIN" >/dev/null 2>&1; then
     echo -e "\e[33m⚠️  UFW not found. Installing...\e[0m"
@@ -100,6 +128,9 @@ if ! iptables_ok || ! iptables_filter_works; then
         echo -e "\e[31mError: Unable to repair iptables stack for UFW\e[0m"
     fi
 fi
+
+# Load kernel modules that UFW/iptables commonly require on minimal images.
+load_netfilter_modules >/dev/null 2>&1 || true
 
 # On kernels without legacy tables, nft is required for UFW to operate.
 force_nft_backend >/dev/null 2>&1 || true
