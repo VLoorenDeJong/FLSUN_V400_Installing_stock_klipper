@@ -67,9 +67,9 @@ PHASE2_SCRIPTS=(
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
-    "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
-    "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
-    "install_python39.sh"                 # step 083.3: install python3.9 + venv
+    # "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
+    # "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
+    # "install_python39.sh"                 # step 083.3: install python3.9 + venv
     # "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
     # "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
     # "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
