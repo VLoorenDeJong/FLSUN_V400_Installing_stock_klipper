@@ -106,6 +106,13 @@ for venv in "${VENV_DIRS[@]}"; do
     pip_bin="${venv}/bin/pip"
 
     if [ -x "$py_bin" ]; then
+        py_major=$(sudo -u "$TARGET_USER" "$py_bin" -c 'import sys; print(sys.version_info[0])' 2>/dev/null || echo "0")
+        if [ "$py_major" -lt 3 ]; then
+            print_warning "$(basename "$venv") uses Python $py_major — skipping pip upgrade. Recreate this venv with Python 3 via KIAUH."
+            had_issues=true
+            continue
+        fi
+
         print_status "Upgrading pip in: $(basename "$venv")..."
 
         # Recover venvs where pip entrypoint exists but pip module is missing.
@@ -151,12 +158,21 @@ if ! python3 -m pip --version >/dev/null 2>&1; then
     python3 -m ensurepip --upgrade >/dev/null 2>&1 || true
 fi
 
+# Some images have python3.9 installed while /usr/bin/python3 lacks pip.
+if command -v python3.9 >/dev/null 2>&1 && ! python3.9 -m pip --version >/dev/null 2>&1; then
+    python3.9 -m ensurepip --upgrade >/dev/null 2>&1 || true
+fi
+
 SETUPTOOLS_LOG=$(mktemp)
 setuptools_pinned=false
 
 if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
     setuptools_pinned=true
 elif python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+    setuptools_pinned=true
+elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
     setuptools_pinned=true
 elif command -v pip3 >/dev/null 2>&1 && pip3 install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
     setuptools_pinned=true

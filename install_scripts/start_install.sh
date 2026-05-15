@@ -5,6 +5,7 @@
 # =============================================================================
 
 debugMode=0
+installNetworkManager=0
 
 # -----------------------------------------------------------------------------
 # KIAUH version pin (optional)
@@ -58,7 +59,7 @@ PHASE1_SCRIPTS=(
     "reboot.sh"
 )
 
-# Phase 2 — Remove old Flsun stack, then install fresh Klipper stack
+# Phase 2 — Prepare system for manual KIAUH sessions
 PHASE2_SCRIPTS=(
     "restore_nm_settings.sh"              # on re-run after sp_installer1 reboot: restore WiFi
     "cleanup_repositories.sh"
@@ -66,10 +67,10 @@ PHASE2_SCRIPTS=(
     "add_flsun_speeder_pad_installer.sh"  # step 035-036: Guilouz sp_installer1 (reboots!)
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
+    "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
     # "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
     # "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
-    # "install_python39.sh"                 # step 083.3: install python3.9 + venv
     # "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
     # "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
     # "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
@@ -259,7 +260,7 @@ while true; do
     echo -e "\e[36m╚══════════════════════════════════════════════════╝\e[0m"
     echo ""
     echo -e "  \e[33m1)\e[0m Phase 1 — OS prep + distro upgrade  \e[90m(ends with reboot)\e[0m"
-    echo -e "  \e[33m2)\e[0m Phase 2 — Klipper/Mainsail/Moonraker/KlipperScreen + optional extras"
+    echo -e "  \e[33m2)\e[0m Phase 2 — Prep for manual KIAUH sessions + optional extras"
     echo -e "  \e[33m3)\e[0m Optional extras only  \e[90m(Webmin, Samba)\e[0m"
     echo -e "  \e[33m4)\e[0m Run individual script"
     echo -e "  \e[33m5)\e[0m Run Phase 1 + Phase 2  \e[90m(full install — Phase 2 runs after reboot)\e[0m"
@@ -283,9 +284,11 @@ while true; do
             run_sequence_with_flags "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
-            echo -e "\n\e[36m=== Phase 2 — Klipper Stack ===\e[0m"
+            echo -e "\n\e[36m=== Phase 2 — Klipper Prep (manual KIAUH) ===\e[0m"
             echo -e "\nSelect optional extras to install after the required Phase 2 steps:"
             optional_checklist
+
+            echo -e "\e[33m⚠️  KIAUH install/remove steps are currently manual (commented out in PHASE2_SCRIPTS).\e[0m"
 
             run_sequence_with_flags "${PHASE2_SCRIPTS[@]}"
 
