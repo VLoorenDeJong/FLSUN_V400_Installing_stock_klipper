@@ -108,6 +108,30 @@ load_netfilter_modules() {
     return 0
 }
 
+report_firewall_preflight() {
+    echo -e "\e[34m🔍 Firewall preflight: module availability\e[0m"
+
+    if command -v lsmod >/dev/null 2>&1; then
+        lsmod | grep -E '^(nf_tables|nf_conntrack|nft_chain_nat|ip_tables|ip6_tables|iptable_filter|ip6table_filter|xt_conntrack)\b' || true
+    else
+        echo -e "\e[33m⚠️  lsmod is not available\e[0m"
+    fi
+
+    if command -v modprobe >/dev/null 2>&1; then
+        echo -e "\e[34m🔍 Firewall preflight: loadable module checks\e[0m"
+        local module
+        for module in nf_tables nf_conntrack nft_chain_nat ip_tables ip6_tables iptable_filter ip6table_filter xt_conntrack; do
+            if modprobe -n "$module" >/dev/null 2>&1; then
+                echo -e "\e[32m✅ modprobe can resolve $module\e[0m"
+            else
+                echo -e "\e[33m⚠️  modprobe cannot resolve $module\e[0m"
+            fi
+        done
+    else
+        echo -e "\e[33m⚠️  modprobe is not available\e[0m"
+    fi
+}
+
 # Install UFW if not present
 if ! command -v "$UFW_BIN" >/dev/null 2>&1; then
     echo -e "\e[33m⚠️  UFW not found. Installing...\e[0m"
@@ -128,6 +152,9 @@ if ! iptables_ok || ! iptables_filter_works; then
         echo -e "\e[31mError: Unable to repair iptables stack for UFW\e[0m"
     fi
 fi
+
+# Show whether the kernel can actually provide the firewall pieces UFW needs.
+report_firewall_preflight
 
 # Load kernel modules that UFW/iptables commonly require on minimal images.
 load_netfilter_modules >/dev/null 2>&1 || true
