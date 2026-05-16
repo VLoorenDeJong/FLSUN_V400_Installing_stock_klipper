@@ -70,6 +70,42 @@ Automates the setup of stock Klipper on an FLSUN V400 Speeder Pad by running a s
 
 ---
 
+## Running all setup commands in one line
+
+You can also run all the setup steps in a single line using `&&` to chain commands. This ensures each command only runs if the previous one succeeds:
+
+```shell
+cd FLSUN_V400_Installing_stock_klipper && sudo chmod -R +x . && sudo ./install_scripts/start_install.sh
+```
+
+This will:
+- Change to the project directory
+- Make all scripts executable
+- Start the main installer script
+
+If any command fails, the next one will not run. This is a convenient way to perform the full setup in one go.
+   The installer automatically handles dpkg lock issues, OS updates, UFW, SSH, the FLSUN Speeder Pad installer, and KIAUH.
+
+
+## Installation Phases and How to Continue
+
+## Installation Phases (Short Overview)
+
+1. **Phase 1:** OS prep & upgrade. Ends with reboot.
+2. **Phase 2:** FLSUN installer prep. Ends with reboot.
+3. **Phase 3:** KIAUH & extras. No reboot needed.
+
+**After each reboot:**
+1. Log in
+2. `cd FLSUN_V400_Installing_stock_klipper`
+3. `sudo ./install_scripts/start_install.sh`
+4. Pick the next phase in the menu
+
+**To re-run a phase:**
+1. Start the script
+2. Press `o` for override mode
+3. Select the phase
+
 ## Connecting with SSH
 
 Download an SSH client → [MobaXterm (recommended)](https://mobaxterm.mobatek.net/download.html)
