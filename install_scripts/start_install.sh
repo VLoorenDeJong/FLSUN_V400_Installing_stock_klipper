@@ -48,11 +48,11 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
     "preserve_wpa_supplicant.sh"         # Backup WiFi credentials for dhcpcd/wpa_supplicant
+    "preserve_wifi_settings.sh"          # Backup WiFi/udev/dhcpcd settings early
     "set_scripts_executable.sh"
     "update_user_password.sh"   # Interactive — prompts for new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
     "cleanup_repositories.sh"
-    "preserve_wifi_settings.sh"
     "add_ssh.sh"
     "updates_install_and_clean.sh"
     "update_kernel.sh"
@@ -60,6 +60,7 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
     "add_bash_show_branch_name.sh"
+    "install_connman_and_migrate_wifi.sh" # Switch to ConnMan and migrate WiFi at end
     "reboot.sh"
 )
 
