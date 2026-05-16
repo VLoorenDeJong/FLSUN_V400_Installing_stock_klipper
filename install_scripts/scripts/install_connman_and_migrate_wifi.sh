@@ -24,6 +24,11 @@ if dpkg -l | grep -q network-manager; then
     apt-get purge -y network-manager || true
 fi
 
+print_warning "\n=== NOTICE: You will lose connection soon! ==="
+print_warning "After this script finishes, the system will reboot."
+print_warning "In 1-2 minuites reconnect with the speederpad and start phas2"
+sleep 5
+
 print_header "Installing ConnMan"
 apt-get update
 apt-get install -y connman
