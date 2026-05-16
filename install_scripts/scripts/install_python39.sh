@@ -42,4 +42,27 @@ print_success "Installed: $INSTALLED_VER"
 mkdir -p "$STATE_DIR"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$STATE_FILE"
 
-print_success "Python 3.9 packages ready."
+
+# --- Fix pip, setuptools, and virtualenv for Python 3.9 ---
+PY39=$(command -v python3.9)
+if ! $PY39 -m pip --version >/dev/null 2>&1; then
+    print_status "Installing pip for Python 3.9..."
+    curl -sSLo get-pip.py https://bootstrap.pypa.io/pip/3.9/get-pip.py
+    $PY39 get-pip.py
+    rm -f get-pip.py
+fi
+
+print_status "Upgrading pip, setuptools, and wheel for Python 3.9..."
+$PY39 -m pip install --upgrade pip setuptools wheel
+
+print_status "Upgrading virtualenv for Python 3.9..."
+$PY39 -m pip install --upgrade virtualenv
+
+SITEPKG=$($PY39 -c "import site; print(site.getsitepackages()[0])")
+if [ -d "$SITEPKG" ]; then
+    print_status "Fixing permissions in $SITEPKG (if needed)..."
+    chown -R root:root "$SITEPKG"
+    chmod -R go-w "$SITEPKG"
+fi
+
+print_success "Python 3.9 packages and environment ready."
