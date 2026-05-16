@@ -31,6 +31,12 @@ systemctl enable connman
 systemctl start connman
 
 print_header "Migrating WiFi settings from wpa_supplicant"
+print_warning "\n=== NOTICE: Network Disruption Expected ==="
+print_warning "This step will switch your system to ConnMan and restart network services."
+print_warning "Your SSH or remote connection will be lost."
+print_warning "After this script finishes, the system will reboot."
+print_warning "You can reconnect via SSH or terminal after the reboot completes."
+sleep 5
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
 if [ ! -f "$WPA_CONF" ]; then
     print_warning "No wpa_supplicant.conf found. Skipping WiFi migration."
@@ -57,3 +63,7 @@ type connmanctl >/dev/null 2>&1 && connmanctl enable wifi
 echo -e "agent on\nscan wifi\nservices\nconnect wifi_$(echo -n $SSID | xxd -ps | tr -d '\n')_managed_psk\n$PSK\nquit" | connmanctl || print_warning "Manual WiFi connection may be required."
 
 print_success "ConnMan installed and WiFi migration attempted. Reboot to apply changes."
+print_header "\n=== Next Steps ==="
+print_success "If you see a 'lost connection' message, this is expected."
+print_success "Wait for the system to reboot, then reconnect."
+print_success "If you can connect after reboot, ConnMan WiFi migration was successful."

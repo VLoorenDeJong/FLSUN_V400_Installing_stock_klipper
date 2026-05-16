@@ -38,6 +38,9 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Migrate old phase marker files if needed
+bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="$SCRIPT_DIR/scripts"
 
@@ -60,6 +63,9 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
     "add_bash_show_branch_name.sh"
+    # Print Phase 1 completion message before network disruption
+    "print_phase1_success.sh"              # Custom script to notify user before connection loss
+    "mark_phase1_complete.sh"              # Mark Phase 1 as complete
     "install_connman_and_migrate_wifi.sh" # Switch to ConnMan and migrate WiFi at end
     "reboot.sh"
 )
@@ -69,6 +75,7 @@ PHASE2_SCRIPTS=(
     "restore_nm_settings.sh"              # re-run after Phase 1 reboot: restore WiFi
     "cleanup_repositories.sh"
     "preserve_nm_settings.sh"             # backup NM profiles before sp_installer1 reboots
+    "mark_phase2_complete.sh"             # Mark Phase 2 as complete
     "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
 )
 
