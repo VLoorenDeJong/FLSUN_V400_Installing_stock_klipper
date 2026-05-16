@@ -1,126 +1,76 @@
-# FLSUN_V400_Installing_stock_klipper
+# FLSUN V400 Stock Klipper — Quick Guide
 
 ## Credits
-
-- [Guilouz/Klipper-Flsun-Speeder-Pad](https://github.com/Guilouz/Klipper-Flsun-Speeder-Pad/) — FLSUN Speeder Pad Klipper configuration and installer, which this project builds upon.
+- Based on [Guilouz/Klipper-Flsun-Speeder-Pad](https://github.com/Guilouz/Klipper-Flsun-Speeder-Pad)
 
 ---
 
-## What this does
-
-Automates the setup of stock Klipper on an FLSUN V400 Speeder Pad by running a sequence of installation scripts:
-
-1. Clean up repositories and fix dpkg locks
-2. Update OS packages and kernel
-3. Upgrade the distro
-4. Configure locale and Wi-Fi country
-5. **Set a new login password** (prompted interactively for current or another user)
-6. Install UFW (firewall) and SSH
-7. Add Git branch name to bash prompt
-8. Download and run the FLSUN Speeder Pad installer
-9. Clone and install KIAUH (Klipper Installation And Update Helper)
-10. Install Webmin (optional web-based admin panel)
-11. Reboot
-
-> **Note:** Samba (SMB file sharing) is included but disabled until the gcode folder path is configured in `backup_config/smb/smb.conf`.
-
-## Supported hardware / OS
+## Supported
 - FLSUN V400 Speeder Pad
 
 ---
 
-## <span id="setting_up_the_basics">Setting up the basics</span>
+## Install in One Go
 
-1. Log into your Speeder Pad.
-
-1. Check if Git is installed:
+1. Log in to your Speeder Pad (SSH or local).
+2. Make sure you have Git:
    ```shell
-   git version
+   git --version
    ```
-   - Installed → `git version 2.43.0`
-   - Not installed → `Command 'git' not found` → [Install Git](#install_git)
-
-1. Confirm internet is working:
+   If Git is missing → see [Install Git (if needed)](#install-git-if-needed)
+3. Make sure you have internet:
    ```shell
-   ping 8.8.8.8
+   ping -c 1 8.8.8.8
    ```
-   Press `CTRL + C` to stop. If there is no response, fix your network first.
-
-1. Clone the repository:
+4. Clone and run:
+- `cd ...` — enter project folder
+- `sudo chmod -R +x .` — make scripts executable (safe to repeat)
+- `sudo ./install_scripts/start_install.sh` — start menu
    ```shell
-   git clone https://github.com/VLoorenDeJong/FLSUN_V400_Installing_stock_klipper
+   git clone https://github.com/VLoorenDeJong/FLSUN_V400_Installing_stock_klipper && cd FLSUN_V400_Installing_stock_klipper && sudo chmod -R +x . && sudo ./install_scripts/start_install.sh
    ```
-
-1. Enter the folder:
-   ```shell
-   cd FLSUN_V400_Installing_stock_klipper
-   ```
-   *(Tip: type `cd FL` then press `TAB` for autocomplete)*
-
-1. Make scripts executable:
-   ```shell
-   sudo chmod -R +x .
-   ```
-
-1. Run the installer:
-   ```shell
-   sudo ./install_scripts/start_install.sh
-   ```
-   The installer automatically handles dpkg lock issues, OS updates, UFW, SSH, the FLSUN Speeder Pad installer, and KIAUH.
 
 ---
 
-## Running all setup commands in one line
+## Phases (Auto-detected)
+1. **Phase 1:** OS prep & upgrade (reboots)
+2. **Phase 2:** FLSUN installer prep (reboots)
+3. **Phase 3:** KIAUH & extras (no reboot)
 
-You can also run all the setup steps in a single line using `&&` to chain commands. This ensures each command only runs if the previous one succeeds:
-
+**After each reboot:**
 ```shell
 cd FLSUN_V400_Installing_stock_klipper && sudo chmod -R +x . && sudo ./install_scripts/start_install.sh
 ```
+- `cd ...` — enter project folder
+- `sudo chmod -R +x .` — make scripts executable (safe to repeat)
+- `sudo ./install_scripts/start_install.sh` — start menu
 
-This will:
-- Change to the project directory
-- Make all scripts executable
-- Start the main installer script
-
-If any command fails, the next one will not run. This is a convenient way to perform the full setup in one go.
-   The installer automatically handles dpkg lock issues, OS updates, UFW, SSH, the FLSUN Speeder Pad installer, and KIAUH.
-
-
-## Installation Phases and How to Continue
-
-## Installation Phases (Short Overview)
-
-1. **Phase 1:** OS prep & upgrade. Ends with reboot.
-2. **Phase 2:** FLSUN installer prep. Ends with reboot.
-3. **Phase 3:** KIAUH & extras. No reboot needed.
-
-**After each reboot:**
-1. Log in
-2. `cd FLSUN_V400_Installing_stock_klipper`
-3. `sudo ./install_scripts/start_install.sh`
-4. Pick the next phase in the menu
+Pick the next phase in the menu.
 
 **To re-run a phase:**
 1. Start the script
-2. Press `o` for override mode
+2. Press `o` for override
 3. Select the phase
-
-## Connecting with SSH
-
-Download an SSH client → [MobaXterm (recommended)](https://mobaxterm.mobatek.net/download.html)
-
-Find your local IP:
-```shell
-ip addr show
-```
-Look for `inet` under `eth0` (e.g. `2: eth0: ... inet 192.168.x.x`). Use that IP in your SSH client.
 
 ---
 
-## <span id="install_git">Install Git</span>
+## SSH Access
+- [MobaXterm (recommended)](https://mobaxterm.mobatek.net/download.html)
+- Find your IP:
+  ```shell
+  ip addr show
+  ```
+  Look for `inet` under `eth0` (e.g. `192.168.x.x`)
 
+---
+
+## Install Git (if needed)
 ```shell
 sudo apt update && sudo apt install git && git --version
 ```
+
+---
+
+## Note
+Samba (SMB) is included but disabled until you set the gcode folder path in `backup_config/smb/smb.conf`.
 
