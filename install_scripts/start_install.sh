@@ -72,9 +72,7 @@ PHASE1_SCRIPTS=(
 
 # Phase 2 — Flsun sp_installer1 prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
-    "restore_nm_settings.sh"              # re-run after Phase 1 reboot: restore WiFi
     "cleanup_repositories.sh"
-    "preserve_nm_settings.sh"             # backup NM profiles before sp_installer1 reboots
     "mark_phase2_complete.sh"             # Mark Phase 2 as complete
     "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
 )
