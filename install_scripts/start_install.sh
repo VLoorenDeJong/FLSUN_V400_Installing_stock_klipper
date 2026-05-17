@@ -83,7 +83,7 @@ PHASE3_SCRIPTS=(
     "add_kiauh.sh"
     "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
-    # "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
+     "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
     # "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
     # "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
     # "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
