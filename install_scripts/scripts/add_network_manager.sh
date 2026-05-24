@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 set -e
 
@@ -12,8 +11,25 @@ if [ -z "$WPA_CONF" ]; then
 elif [ -f "$WPA_CONF" ]; then
     SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
     PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
-    echo "=== (CREDENTIALS) SSID: $SSID"
-    echo "=== (CREDENTIALS) PSK: $PSK"
+    # Obfuscate SSID and PSK for all console output
+    obfuscate() {
+        local val="$1"
+        local len=${#val}
+        if [ "$len" -le 4 ]; then
+            printf '%s' "$val"
+        else
+            local first2=${val:0:2}
+            local last2=${val: -2}
+            printf '%s***%s' "$first2" "$last2"
+        fi
+    }
+    obf_ssid=$(obfuscate "$SSID")
+    obf_psk=$(obfuscate "$PSK")
+    echo "=== (CREDENTIALS) SSID: $obf_ssid"
+    echo "=== (CREDENTIALS) PSK: $obf_psk"
+    # Export for use in later debug/status output
+    export SSID_OBF="$obf_ssid"
+    export PSK_OBF="$obf_psk"
     sync
 else
     echo "=== (CREDENTIALS) No wpa_supplicant.conf found to import WiFi credentials"
@@ -86,18 +102,71 @@ else
     print_success "NetworkManager/nmcli already installed."
 fi
 
+
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
-# 1. Mask and stop wpa_supplicant service (if it exists)
-print_status "Masking and stopping wpa_supplicant service (prevents conflicts)"
+# 1. Mask, stop, and disable wpa_supplicant and dhcpcd (if present)
+
+print_status "Masking, stopping, and disabling wpa_supplicant and dhcpcd (prevents conflicts)"
 if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
     systemctl mask wpa_supplicant || true
     systemctl stop wpa_supplicant || true
+    systemctl disable wpa_supplicant || true
 else
     print_warning "wpa_supplicant.service does not exist. Skipping."
 fi
-print_success "wpa_supplicant masked/stopped"
+if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
+    systemctl stop dhcpcd || true
+    systemctl disable dhcpcd || true
+    print_success "dhcpcd stopped and disabled"
+else
+    print_status "dhcpcd.service does not exist. Skipping."
+fi
+# --- Extra: kill any manually started wpa_supplicant processes (except those started by NetworkManager) ---
+# shellcheck disable=SC2009
+WPA_PIDS=$(pgrep -f wpa_supplicant | while read -r pid; do
+    # Check if the process was started by NetworkManager
+    if ! ps -p "$pid" -o cmd= | grep -q NetworkManager; then
+        echo "$pid"
+    fi
+done)
+if [ -n "$WPA_PIDS" ]; then
+    print_warning "Killing manually started wpa_supplicant processes: $WPA_PIDS (this may drop WiFi if you are connected via wpa_supplicant directly)"
+    for pid in $WPA_PIDS; do
+        kill "$pid" || true
+    done
+    sleep 2
+    print_success "Killed all non-NetworkManager wpa_supplicant processes."
+else
+    print_status "No manual wpa_supplicant processes found."
+fi
+print_success "wpa_supplicant masked/stopped/disabled and manual processes killed."
+
+# 2. Comment out legacy wlan0/eth0 config in /etc/network/interfaces
+IFUPDOWN_CONF="/etc/network/interfaces"
+if [ -f "$IFUPDOWN_CONF" ]; then
+    print_status "Checking for legacy wlan0/eth0 config in $IFUPDOWN_CONF..."
+    if grep -Eq '^(iface|auto) +(wlan0|eth0)' "$IFUPDOWN_CONF"; then
+        print_warning "Legacy config for wlan0/eth0 found in $IFUPDOWN_CONF. Commenting out..."
+        sed -i.bak '/^iface \(wlan0\|eth0\)/ s/^/#/; /^auto \(wlan0\|eth0\)/ s/^/#/' "$IFUPDOWN_CONF"
+        print_success "Commented out legacy wlan0/eth0 config in $IFUPDOWN_CONF (backup at $IFUPDOWN_CONF.bak)"
+    else
+        print_status "No legacy wlan0/eth0 config found in $IFUPDOWN_CONF."
+    fi
+else
+    print_status "$IFUPDOWN_CONF does not exist."
+fi
+
+# 3. Print diagnostics for interface and WiFi scan
+print_header "==== Diagnostics: nmcli device status ===="
+nmcli device status || true
+print_header "==== Diagnostics: ip link show wlan0 ===="
+ip link show wlan0 || true
+print_header "==== Diagnostics: nmcli dev wifi list ===="
+nmcli dev wifi list || true
+print_header "==== Diagnostics: iw reg get (country code) ===="
+iw reg get || true
 
 # 2. Extract and print WiFi credentials before any NetworkManager actions
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
@@ -106,8 +175,8 @@ PSK=""
 if [ -f "$WPA_CONF" ]; then
     SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
     PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
-    print_status "(PRE-CONFIG) Extracted SSID for second network: $SSID"
-    print_status "(PRE-CONFIG) Extracted PSK for second network: $PSK"
+    print_status "(PRE-CONFIG) Extracted SSID for second network: $SSID_OBF"
+    print_status "(PRE-CONFIG) Extracted PSK for second network: $PSK_OBF"
 else
     print_warning "No wpa_supplicant.conf found to import WiFi credentials"
 fi
@@ -139,12 +208,12 @@ if [ -f "$WPA_CONF" ]; then
         print_header "==== NetworkManager log tail (last 100 lines) ===="
         tail -100 /tmp/nm-tail.log
         # --- Add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
-        print_status "Adding WiFi network ($SSID) to NetworkManager"
+        print_status "Adding WiFi network ($SSID_OBF) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
             if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
-                print_success "WiFi network ($SSID) added to NetworkManager"
+                print_success "WiFi network ($SSID_OBF) added to NetworkManager"
             else
-                print_warning "Failed to add WiFi network ($SSID) to NetworkManager"
+                print_warning "Failed to add WiFi network ($SSID_OBF) to NetworkManager"
             fi
         else
             print_warning "Could not extract SSID/PSK for 'MyNetwork' from wpa_supplicant.conf"
