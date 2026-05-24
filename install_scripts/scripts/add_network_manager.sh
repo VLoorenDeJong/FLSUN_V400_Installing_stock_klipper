@@ -1,5 +1,21 @@
+
 #!/usr/bin/env bash
 set -e
+
+# --- Print WiFi credentials before anything else ---
+WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
+SSID=""
+PSK=""
+if [ -f "$WPA_CONF" ]; then
+    SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
+    PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
+    echo "=== (PRE-CONFIG) Extracted SSID for second network: $SSID"
+    echo "=== (PRE-CONFIG) Extracted PSK for second network: $PSK"
+    sync
+else
+    echo "=== No wpa_supplicant.conf found to import WiFi credentials"
+    sync
+fi
 
 export DEBIAN_FRONTEND=noninteractive
 
