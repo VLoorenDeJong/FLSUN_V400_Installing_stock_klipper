@@ -48,9 +48,9 @@ readonly NM_CONF_FILE="${NM_CONF_DIR}/any-user.conf"
 # --- Main ---
 
 print_header "Install and Configure NetworkManager"
-print_warning "OPTIONAL STEP: NetworkManager is not required on all systems."
+print_warning "REQUIRED: NetworkManager is needed for the screen software."
 print_warning "Installing it disables dhcpcd (the default DHCP client)."
-print_warning "This can cause network issues such as losing your internet connection"
+print_warning "This can cause network issues such as losing your internet connection."
 
 # --- Ensure NetworkManager and nmcli are installed ---
 if ! command -v nmcli >/dev/null 2>&1; then
@@ -73,44 +73,68 @@ fi
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
-# 1. Disable and stop dhcpcd and wpa_supplicant services (if they exist)
-print_status "Disabling dhcpcd and wpa_supplicant services (prevents conflicts)"
-if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
-    systemctl disable dhcpcd || true
-    systemctl stop dhcpcd || true
-else
-    print_warning "dhcpcd.service does not exist. Skipping."
-fi
+# 1. Mask and stop wpa_supplicant service (if it exists)
+print_status "Masking and stopping wpa_supplicant service (prevents conflicts)"
 if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
     systemctl mask wpa_supplicant || true
     systemctl stop wpa_supplicant || true
 else
     print_warning "wpa_supplicant.service does not exist. Skipping."
 fi
-print_success "dhcpcd and wpa_supplicant disabled/masked"
+print_success "wpa_supplicant masked/stopped"
 
 # 2. Import existing wpa_supplicant WiFi credentials into NetworkManager
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
 if [ -f "$WPA_CONF" ]; then
     print_status "Importing WiFi credentials from wpa_supplicant.conf into NetworkManager"
     if command -v nmcli >/dev/null 2>&1; then
+        # Ensure NetworkManager is running
+        if ! systemctl is-active --quiet NetworkManager; then
+            print_status "Starting NetworkManager service..."
+            systemctl start NetworkManager
+            sleep 2
+        fi
         if nmcli connection import type wifi file "$WPA_CONF"; then
             print_success "WiFi credentials imported into NetworkManager"
         else
             print_warning "Could not import WiFi credentials (may already exist or not needed)"
         fi
-        # --- Extract and add second network block to NetworkManager ---
-        print_status "Extracting second WiFi network from wpa_supplicant.conf and adding to NetworkManager"
-        SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/\"/,"",$0); print $2}' "$WPA_CONF")
-        PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/\"/,"",$0); print $2}' "$WPA_CONF")
+        # --- Extract and add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
+        print_status "Extracting WiFi network 'MyNetwork' from wpa_supplicant.conf and adding to NetworkManager"
+        SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
+        PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
+        print_status "Extracted SSID for second network: $SSID"
+        print_status "Extracted PSK for second network: $PSK"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
             if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
-                print_success "Second WiFi network ($SSID) added to NetworkManager"
+                print_success "WiFi network ($SSID) added to NetworkManager"
             else
-                print_warning "Failed to add second WiFi network ($SSID) to NetworkManager"
+                print_warning "Failed to add WiFi network ($SSID) to NetworkManager"
             fi
         else
-            print_warning "Could not extract SSID/PSK for second network from wpa_supplicant.conf"
+            print_warning "Could not extract SSID/PSK for 'MyNetwork' from wpa_supplicant.conf"
+        fi
+        # --- Check if nmcli settings match ifupdown (interfaces) settings ---
+        IFUPDOWN_CONF="/etc/network/interfaces"
+        if [ -f "$IFUPDOWN_CONF" ]; then
+            print_status "Comparing NetworkManager and ifupdown (interfaces) network settings..."
+            # List interfaces managed by ifupdown
+            IFUPDOWN_IFS=$(awk '/iface /{print $2}' "$IFUPDOWN_CONF" | sort | uniq)
+            NM_IFS=$(nmcli -t -f DEVICE,TYPE device | awk -F: '$2=="ethernet"||$2=="wifi"{print $1}' | sort | uniq)
+            for iface in $IFUPDOWN_IFS; do
+                if echo "$NM_IFS" | grep -qw "$iface"; then
+                    print_success "Interface $iface is present in both NetworkManager and ifupdown."
+                else
+                    print_warning "Interface $iface is in ifupdown but not managed by NetworkManager."
+                fi
+            done
+            for iface in $NM_IFS; do
+                if echo "$IFUPDOWN_IFS" | grep -qw "$iface"; then
+                    : # already reported above
+                else
+                    print_warning "Interface $iface is managed by NetworkManager but not present in ifupdown."
+                fi
+            done
         fi
     else
         print_error "nmcli not found after supposed install. Skipping WiFi import."
