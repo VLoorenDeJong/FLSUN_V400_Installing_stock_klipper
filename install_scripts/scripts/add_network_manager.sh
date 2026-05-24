@@ -206,6 +206,15 @@ if [ -f "$WPA_CONF" ]; then
         # Save and print last 100 lines of NM log
         print_header "==== NetworkManager log tail (last 100 lines) ===="
         tail -100 /tmp/nm-tail.log
+        # Preserve the log for later review
+        LOG_DEST="/var/log/nm-tail.log"
+        if cp /tmp/nm-tail.log "$LOG_DEST" 2>/dev/null; then
+            print_status "Full NetworkManager log preserved at $LOG_DEST"
+        else
+            LOG_DEST="$HOME/nm-tail.log"
+            cp /tmp/nm-tail.log "$LOG_DEST"
+            print_warning "Could not write to /var/log, log saved to $LOG_DEST instead."
+        fi
         # --- Add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
         print_status "Adding WiFi network ($SSID_OBF) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
