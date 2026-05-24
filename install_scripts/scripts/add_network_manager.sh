@@ -2,18 +2,21 @@
 #!/usr/bin/env bash
 set -e
 
-# --- Print WiFi credentials before anything else ---
+# --- ABSOLUTELY FIRST: Print WiFi credentials before anything else, no other output above this ---
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
 SSID=""
 PSK=""
-if [ -f "$WPA_CONF" ]; then
+if [ -z "$WPA_CONF" ]; then
+    echo "=== (CREDENTIALS) WPA_CONF variable is unset or empty; cannot check for WiFi credentials."
+    sync
+elif [ -f "$WPA_CONF" ]; then
     SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
     PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
-    echo "=== (PRE-CONFIG) Extracted SSID for second network: $SSID"
-    echo "=== (PRE-CONFIG) Extracted PSK for second network: $PSK"
+    echo "=== (CREDENTIALS) SSID: $SSID"
+    echo "=== (CREDENTIALS) PSK: $PSK"
     sync
 else
-    echo "=== No wpa_supplicant.conf found to import WiFi credentials"
+    echo "=== (CREDENTIALS) No wpa_supplicant.conf found to import WiFi credentials"
     sync
 fi
 
@@ -64,9 +67,6 @@ readonly NM_CONF_FILE="${NM_CONF_DIR}/any-user.conf"
 # --- Main ---
 
 print_header "Install and Configure NetworkManager"
-print_warning "REQUIRED: NetworkManager is needed for the screen software."
-print_warning "Installing it disables dhcpcd (the default DHCP client)."
-print_warning "This can cause network issues such as losing your internet connection."
 
 # --- Ensure NetworkManager and nmcli are installed ---
 if ! command -v nmcli >/dev/null 2>&1; then
