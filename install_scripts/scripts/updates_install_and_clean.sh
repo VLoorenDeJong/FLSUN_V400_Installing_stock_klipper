@@ -3,46 +3,41 @@
 # Suppress confirmation prompts for apt
 export DEBIAN_FRONTEND=noninteractive
 
-# Source shared utilities (safe - no breaking changes)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/shared_utilities.sh" ]; then
-    source "$SCRIPT_DIR/shared_utilities.sh"
-else
-    # Fallback to inline functions if shared file not found (maintains compatibility)
-    echo "Warning: shared_utilities.sh not found, using inline functions"
-    show_progress() {
-        local message="$1"
-        local command="$2"
-        local interval="${3:-5}"
-        local timeout="${4:-600}"
-        printf "\033[34m%s\033[0m\n" "$message"
-        eval "$command" &
-        local cmd_pid=$!
-        local start_time
-        start_time=$(date +%s)
-        while kill -0 $cmd_pid 2>/dev/null; do
-            printf "."
-            sleep "$interval"
-            local current_time
-            current_time=$(date +%s)
-            if (( current_time - start_time > timeout )); then
-                printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
-                kill -TERM $cmd_pid 2>/dev/null || true
-                sleep 2
-                kill -KILL $cmd_pid 2>/dev/null || true
-                return 1
-            fi
-        done
-        wait $cmd_pid 2>/dev/null
-        local exit_code=$?
-        printf "\n"
-        return $exit_code
-    }
-fi
+
+# Inline show_progress function (always used)
+show_progress() {
+    local message="$1"
+    local command="$2"
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    printf "\033[34m%s\033[0m\n" "$message"
+    eval "$command" &
+    local cmd_pid=$!
+    local start_time
+    start_time=$(date +%s)
+    while kill -0 $cmd_pid 2>/dev/null; do
+        printf "."
+        sleep "$interval"
+        local current_time
+        current_time=$(date +%s)
+        if (( current_time - start_time > timeout )); then
+            printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
+            kill -TERM $cmd_pid 2>/dev/null || true
+            sleep 2
+            kill -KILL $cmd_pid 2>/dev/null || true
+            return 1
+        fi
+    done
+    wait $cmd_pid 2>/dev/null
+    local exit_code=$?
+    printf "\n"
+    return $exit_code
+}
 
 # Function to check and fix DPKG locks (calls dedicated script)
 check_and_fix_dpkg_lock() {
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local fix_script="$script_dir/fix_dpkg_lock.sh"
     
     if [ -f "$fix_script" ]; then

@@ -50,8 +50,6 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
-    # "preserve_wpa_supplicant.sh"         # Backup WiFi credentials for dhcpcd/wpa_supplicant
-    # "preserve_wifi_settings.sh"          # Backup WiFi/udev/dhcpcd settings early
     "set_scripts_executable.sh"
     "update_user_password.sh"   # Interactive — prompts for new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
@@ -66,7 +64,7 @@ PHASE1_SCRIPTS=(
     # Print Phase 1 completion message before network disruption
     "print_phase1_success.sh"              # Custom script to notify user before connection loss
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
-    # "install_connman_and_migrate_wifi.sh" # Switch to ConnMan and migrate WiFi at end
+    # "install_connman_and_migrate_wifi.sh" # [ARCHIVED: persistence workaround]
     "reboot.sh"
 )
 
@@ -83,7 +81,7 @@ PHASE3_SCRIPTS=(
     "add_kiauh.sh"
     "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
-     "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
+    "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
     # "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
     # "start_kiauh.sh 2"                    # SESSION 2: install Klipper/Moonraker/Mainsail
     # "fix_klipper_venv.sh"                 # fix aenum + re-install klippy requirements
@@ -200,13 +198,13 @@ optional_checklist() {
         echo ""
         read -rp "Choice: " opt </dev/tty
         case "$opt" in
-            a) for i in "${!toggles[@]}"; do toggles[$i]="on"; done ;;
-            n) for i in "${!toggles[@]}"; do toggles[$i]="off"; done ;;
+            a) for i in "${!toggles[@]}"; do toggles[i]="on"; done ;;
+            n) for i in "${!toggles[@]}"; do toggles[i]="off"; done ;;
             "") break ;;
             [0-9]*)
                 local idx=$((opt-1))
-                if [[ $idx -ge 0 && $idx -lt ${#OPTIONAL_ORDER[@]} ]]; then
-                    [[ "${toggles[$idx]}" == "on" ]] && toggles[$idx]="off" || toggles[$idx]="on"
+                if [[ idx -ge 0 && idx -lt ${#OPTIONAL_ORDER[@]} ]]; then
+                    [[ "${toggles[idx]}" == "on" ]] && toggles[idx]="off" || toggles[idx]="on"
                 else
                     echo -e "\e[33m⚠️  Invalid number\e[0m"
                 fi ;;
@@ -263,9 +261,9 @@ run_phase() {
         return 0
     fi
     run_sequence_with_flags "$@"
-    local result=$?
-    [[ $result -eq 0 ]] && mark_phase_done "$phase_num"
-    return $result
+    local phase_result=$?
+    [[ $phase_result -eq 0 ]] && mark_phase_done "$phase_num"
+    return $phase_result
 }
 
 # Individual scripts submenu
@@ -314,7 +312,7 @@ while true; do
     phase_label 3 "Phase 3 — Post-reboot: KIAUH prep + tools"
     echo -e "  \e[33m4)\e[0m  Optional extras only  \e[90m(Webmin, Samba)\e[0m"
     echo -e "  \e[33m5)\e[0m  Run individual script"
-    echo -e "  \e[33m6)\e[0m  Full install  \e[90m(Phase 1 \u2192 2 \u2192 3, reboots in between)\e[0m"
+    echo -e "  \e[33m6)\e[0m  Full install  \e[90m(Phase 1 → 2 → 3, reboots in between)\e[0m"
     if [[ "$debugMode" -eq 1 ]]; then
         echo -e "  \e[33md)\e[0m  Debug mode          \e[32m[ON]\e[0m"
     else

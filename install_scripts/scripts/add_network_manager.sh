@@ -3,14 +3,7 @@ set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
-# --- User detection ---
-if [ -n "$SUDO_USER" ]; then
-    ACTUAL_USER="$SUDO_USER"
-    ACTUAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-else
-    ACTUAL_USER=$(whoami)
-    ACTUAL_HOME="$HOME"
-fi
+# --- User detection (removed unused variables) ---
 
 # --- Inline utility functions ---
 show_progress() {
@@ -57,3 +50,57 @@ print_header "Install and Configure NetworkManager"
 print_warning "OPTIONAL STEP: NetworkManager is not required on all systems."
 print_warning "Installing it disables dhcpcd (the default DHCP client)."
 print_warning "This can cause network issues such as losing your internet connection"
+
+# --- Mitigations for connection issues ---
+print_header "Mitigating NetworkManager connection issues"
+
+# 1. Disable and stop dhcpcd and wpa_supplicant services
+print_status "Disabling dhcpcd and wpa_supplicant services (prevents conflicts)"
+systemctl disable dhcpcd || true
+systemctl stop dhcpcd || true
+systemctl mask wpa_supplicant || true
+systemctl stop wpa_supplicant || true
+print_success "dhcpcd and wpa_supplicant disabled/masked"
+
+# 2. Import existing wpa_supplicant WiFi credentials into NetworkManager
+WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
+if [ -f "$WPA_CONF" ]; then
+    print_status "Importing WiFi credentials from wpa_supplicant.conf into NetworkManager"
+    if nmcli connection import type wifi file "$WPA_CONF"; then
+        print_success "WiFi credentials imported into NetworkManager"
+    else
+        print_warning "Could not import WiFi credentials (may already exist or not needed)"
+    fi
+    # --- Extract and add second network block to NetworkManager ---
+    print_status "Extracting second WiFi network from wpa_supplicant.conf and adding to NetworkManager"
+    SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/\"/,"",$0); print $2}' "$WPA_CONF")
+    PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/\"/,"",$0); print $2}' "$WPA_CONF")
+    if [ -n "$SSID" ] && [ -n "$PSK" ]; then
+        if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
+            print_success "Second WiFi network ($SSID) added to NetworkManager"
+        else
+            print_warning "Failed to add second WiFi network ($SSID) to NetworkManager"
+        fi
+    else
+        print_warning "Could not extract SSID/PSK for second network from wpa_supplicant.conf"
+    fi
+else
+    print_warning "No wpa_supplicant.conf found to import WiFi credentials"
+fi
+
+# 3. Ensure polkit and NM config for user management
+print_status "Ensuring polkit and NetworkManager config for user management"
+mkdir -p "$NM_CONF_DIR"
+echo -e "[main]\nauth-polkit=false" > "$NM_CONF_FILE"
+chmod 644 "$NM_CONF_FILE"
+
+# 4. Set NetworkManager to manage all interfaces
+NM_MAIN_CONF="/etc/NetworkManager/NetworkManager.conf"
+if grep -q '^managed=' "$NM_MAIN_CONF"; then
+    sed -i 's/^managed=.*/managed=true/' "$NM_MAIN_CONF"
+else
+    echo -e '\n[ifupdown]\nmanaged=true' >> "$NM_MAIN_CONF"
+fi
+print_success "NetworkManager set to manage all interfaces"
+
+print_success "NetworkManager mitigations complete. Reboot recommended."
