@@ -100,6 +100,10 @@ fi
 if [ -f "$WPA_CONF" ]; then
     print_status "Importing WiFi credentials from wpa_supplicant.conf into NetworkManager"
     if command -v nmcli >/dev/null 2>&1; then
+        # Start tailing NetworkManager logs in background for debugging
+        print_status "Tailing NetworkManager logs in background (see /tmp/nm-tail.log)..."
+        journalctl -u NetworkManager -f > /tmp/nm-tail.log 2>&1 &
+        TAIL_PID=$!
         # Ensure NetworkManager is running
         if ! systemctl is-active --quiet NetworkManager; then
             print_status "Starting NetworkManager service..."
@@ -111,6 +115,13 @@ if [ -f "$WPA_CONF" ]; then
         else
             print_warning "Could not import WiFi credentials (may already exist or not needed)"
         fi
+        # Stop tailing logs after main NM actions
+        if [ -n "$TAIL_PID" ]; then
+            kill $TAIL_PID >/dev/null 2>&1
+        fi
+        # Save and print last 100 lines of NM log
+        print_header "==== NetworkManager log tail (last 100 lines) ===="
+        tail -100 /tmp/nm-tail.log
         # --- Add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
         print_status "Adding WiFi network ($SSID) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
