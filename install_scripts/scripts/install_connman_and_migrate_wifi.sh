@@ -56,6 +56,7 @@ if [ -z "$SSID" ] || [ -z "$PSK" ]; then
     exit 0
 fi
 
+
 print_status "Configuring ConnMan WiFi service for SSID: $SSID"
 # Remove any existing ConnMan WiFi configs
 db_dir="/var/lib/connman"
@@ -65,10 +66,33 @@ rm -rf "$db_dir/wifi_*"
 type connmanctl >/dev/null 2>&1 && connmanctl enable wifi
 
 # Configure WiFi using connmanctl
-echo -e "agent on\nscan wifi\nservices\nconnect wifi_$(echo -n $SSID | xxd -ps | tr -d '\n')_managed_psk\n$PSK\nquit" | connmanctl || print_warning "Manual WiFi connection may be required."
+CONNMAN_LOG="/tmp/connman_wifi_connect.log"
+echo -e "agent on\nscan wifi\nservices\nconnect wifi_$(echo -n "$SSID" | xxd -ps | tr -d '\n')_managed_psk\n$PSK\nquit" | connmanctl > "$CONNMAN_LOG" 2>&1 || print_warning "Manual WiFi connection may be required."
 
-print_success "ConnMan installed and WiFi migration attempted. Reboot to apply changes."
+# Check if ConnMan connected successfully
+sleep 5
+if connmanctl services | grep -q "wifi_.*_managed_psk.*online"; then
+    print_success "ConnMan WiFi connection successful."
+    print_success "ConnMan installed and WiFi migration completed. Reboot to apply changes."
+else
+    print_warning "ConnMan WiFi connection failed. Attempting to restore original wpa_supplicant.conf and dhcpcd."
+    STATE_DIR="/var/lib/linuxsetups"
+    BACKUP_FILE="$STATE_DIR/wpa_supplicant.conf.backup"
+    WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
+    if [ -f "$BACKUP_FILE" ]; then
+        cp "$BACKUP_FILE" "$WPA_CONF"
+        chmod 600 "$WPA_CONF"
+        print_success "Restored original wpa_supplicant.conf from backup."
+        systemctl restart dhcpcd || true
+        print_status "Restarted dhcpcd."
+        print_warning "Please check if WiFi is restored. If not, manual intervention may be required."
+    else
+        print_error "No backup wpa_supplicant.conf found at $BACKUP_FILE. Cannot restore."
+    fi
+fi
+
 print_header "\n=== Next Steps ==="
 print_success "If you see a 'lost connection' message, this is expected."
 print_success "Wait for the system to reboot, then reconnect."
 print_success "If you can connect after reboot, ConnMan WiFi migration was successful."
+print_warning "If you cannot connect, fallback restoration was attempted. Manual recovery may be needed."
