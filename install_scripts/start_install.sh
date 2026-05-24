@@ -50,8 +50,8 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
-    "preserve_wpa_supplicant.sh"         # Backup WiFi credentials for dhcpcd/wpa_supplicant
-    "preserve_wifi_settings.sh"          # Backup WiFi/udev/dhcpcd settings early
+    # "preserve_wpa_supplicant.sh"         # Backup WiFi credentials for dhcpcd/wpa_supplicant
+    # "preserve_wifi_settings.sh"          # Backup WiFi/udev/dhcpcd settings early
     "set_scripts_executable.sh"
     "update_user_password.sh"   # Interactive — prompts for new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
