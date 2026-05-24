@@ -50,34 +50,29 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
-    # "set_scripts_executable.sh"
-    # "update_user_password.sh"   # Interactive — prompts for new password
-    # "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
-    # "cleanup_repositories.sh"
-    # "add_ssh.sh"
-    # "updates_install_and_clean.sh"
-    # "update_kernel.sh"
-    # "upgrade_distro.sh"
+     "set_scripts_executable.sh"
+     "update_user_password.sh"   # Interactive — prompts for new password
+     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
+     "cleanup_repositories.sh"
+     "add_ssh.sh"
+     "updates_install_and_clean.sh"
+     "update_kernel.sh"
+     "upgrade_distro.sh"
      "configure_locale_and_wifi_country.sh"
-     "add_network_manager.sh"
+    # "add_network_manager.sh"
     # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
-    # "add_bash_show_branch_name.sh"
+     "add_bash_show_branch_name.sh"
     # Print Phase 1 completion message before network disruption
     "print_phase1_success.sh"              # Custom script to notify user before connection loss
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
-    
+    "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
     "reboot.sh"
 )
 
-# Phase 2 — Flsun sp_installer1 prep (ends with sp_installer1 reboot)
+# Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
     "mark_phase2_complete.sh"             # Mark Phase 2 as complete
-    "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
-)
-
-# Phase 3 — Post-sp_installer1 reboot: prepare for manual KIAUH sessions
-PHASE3_SCRIPTS=(
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
     "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
@@ -309,8 +304,7 @@ while true; do
     echo -e "\e[36m╚══════════════════════════════════════════════════╝\e[0m"
     echo ""
     phase_label 1 "Phase 1 — OS prep + distro upgrade      (ends with reboot)"
-    phase_label 2 "Phase 2 — Flsun sp_installer1 prep      (ends with reboot)"
-    phase_label 3 "Phase 3 — Post-reboot: KIAUH prep + tools"
+    phase_label 2 "Phase 2 — Flsun sp_installer1 + KIAUH prep (ends with reboot)"
     echo -e "  \e[33m4)\e[0m  Optional extras only  \e[90m(Webmin, Samba)\e[0m"
     echo -e "  \e[33m5)\e[0m  Run individual script"
     echo -e "  \e[33m6)\e[0m  Full install  \e[90m(Phase 1 → 2 → 3, reboots in between)\e[0m"
@@ -339,25 +333,11 @@ while true; do
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
-            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 Prep ===\e[0m"
-            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1). Run Phase 3 after reboot.\e[0m"
+            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
             read -rp "Continue? [y/N]: " confirm </dev/tty
             if [[ "$confirm" =~ ^[Yy]$ ]]; then
                 run_phase 2 "${PHASE2_SCRIPTS[@]}"
-            fi
-            ;;
-        3)
-            echo -e "\n\e[36m=== Phase 3 — Post-reboot KIAUH Prep ===\e[0m"
-            echo -e "\nSelect optional extras to install after the Phase 3 steps:"
-            optional_checklist
-
-            echo -e "\e[33m⚠️  KIAUH install/remove steps are currently manual (commented out in PHASE3_SCRIPTS).\e[0m"
-
-            run_phase 3 "${PHASE3_SCRIPTS[@]}"
-
-            if [[ ${#SELECTED[@]} -gt 0 ]]; then
-                echo -e "\e[36m─── Running selected optional extras ───\e[0m"
-                run_sequence "${SELECTED[@]}"
             fi
             ;;
         4)
@@ -373,7 +353,7 @@ while true; do
             menu_individual
             ;;
         6)
-            echo -e "\n\e[36m=== Full Install: Phase 1 + 2 + 3 ===\e[0m"
+            echo -e "\n\e[36m=== Full Install: Phase 1 + 2 ===\e[0m"
             echo -e "\e[33m⚠️  Phase 1 and Phase 2 each end with a reboot. After each reboot, re-run this script and choose the next phase.\e[0m"
             read -rp "Start Phase 1 now? [y/N]: " confirm </dev/tty
             [[ "$confirm" =~ ^[Yy]$ ]] && run_phase 1 "${PHASE1_SCRIPTS[@]}"
