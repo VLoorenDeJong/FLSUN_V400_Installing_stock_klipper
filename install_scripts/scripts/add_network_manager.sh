@@ -83,8 +83,20 @@ else
 fi
 print_success "wpa_supplicant masked/stopped"
 
-# 2. Import existing wpa_supplicant WiFi credentials into NetworkManager
+# 2. Extract and print WiFi credentials before any NetworkManager actions
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
+SSID=""
+PSK=""
+if [ -f "$WPA_CONF" ]; then
+    SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
+    PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
+    print_status "(PRE-CONFIG) Extracted SSID for second network: $SSID"
+    print_status "(PRE-CONFIG) Extracted PSK for second network: $PSK"
+else
+    print_warning "No wpa_supplicant.conf found to import WiFi credentials"
+fi
+
+# 3. Import existing wpa_supplicant WiFi credentials into NetworkManager
 if [ -f "$WPA_CONF" ]; then
     print_status "Importing WiFi credentials from wpa_supplicant.conf into NetworkManager"
     if command -v nmcli >/dev/null 2>&1; then
@@ -99,12 +111,8 @@ if [ -f "$WPA_CONF" ]; then
         else
             print_warning "Could not import WiFi credentials (may already exist or not needed)"
         fi
-        # --- Extract and add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
-        print_status "Extracting WiFi network 'MyNetwork' from wpa_supplicant.conf and adding to NetworkManager"
-        SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
-        PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
-        print_status "Extracted SSID for second network: $SSID"
-        print_status "Extracted PSK for second network: $PSK"
+        # --- Add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
+        print_status "Adding WiFi network ($SSID) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
             if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
                 print_success "WiFi network ($SSID) added to NetworkManager"
@@ -139,8 +147,6 @@ if [ -f "$WPA_CONF" ]; then
     else
         print_error "nmcli not found after supposed install. Skipping WiFi import."
     fi
-else
-    print_warning "No wpa_supplicant.conf found to import WiFi credentials"
 fi
 
 
