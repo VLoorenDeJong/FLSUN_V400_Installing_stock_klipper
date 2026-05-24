@@ -66,7 +66,7 @@ PHASE1_SCRIPTS=(
     # Print Phase 1 completion message before network disruption
     "print_phase1_success.sh"              # Custom script to notify user before connection loss
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
-    "install_connman_and_migrate_wifi.sh" # Switch to ConnMan and migrate WiFi at end
+    # "install_connman_and_migrate_wifi.sh" # Switch to ConnMan and migrate WiFi at end
     "reboot.sh"
 )
 
