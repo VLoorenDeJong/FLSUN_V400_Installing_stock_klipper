@@ -15,12 +15,11 @@ elif [ -f "$WPA_CONF" ]; then
     obfuscate() {
         local val="$1"
         local len=${#val}
-        if [ "$len" -le 4 ]; then
+        if [ "$len" -le 2 ]; then
             printf '%s' "$val"
         else
             local first2=${val:0:2}
-            local last2=${val: -2}
-            printf '%s***%s' "$first2" "$last2"
+            printf '%s***' "$first2"
         fi
     }
     obf_ssid=$(obfuscate "$SSID")
