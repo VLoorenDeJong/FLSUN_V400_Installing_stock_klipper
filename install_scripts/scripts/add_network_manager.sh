@@ -56,7 +56,7 @@ print_warning "This can cause network issues such as losing your internet connec
 if ! command -v nmcli >/dev/null 2>&1; then
     print_status "NetworkManager/nmcli not found. Installing..."
     if command -v apt-get >/dev/null 2>&1; then
-        show_progress "Installing NetworkManager..." "apt-get update && apt-get install -y network-manager"
+        show_progress "Installing NetworkManager..." "apt-get update && apt-get install -y -o Dpkg::Options::=\"--force-confold\" network-manager"
     else
         print_error "apt-get not found. Please install NetworkManager manually."
         exit 1
