@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+
+# --- SAFETY NET: Timed rollback for remote SSH ---
+# This will reboot the device in 5 minutes unless you cancel it (kill %1 or pkill -f 'sleep 300 && reboot')
+(
+    sleep 300 && echo "[SAFETY] No cancel detected, rebooting to restore network..." && reboot
+) &
+SAFETY_PID=$!
+echo "[SAFETY] Rollback timer started (PID $SAFETY_PID). If network is up and stable, run: kill $SAFETY_PID to cancel reboot."
 set -e
 
 # --- ABSOLUTELY FIRST: Print WiFi credentials before anything else, no other output above this ---
@@ -107,18 +115,15 @@ print_header "Mitigating NetworkManager connection issues"
 
 # 1. Mask, stop, and disable wpa_supplicant and dhcpcd (if present)
 
-print_status "Masking, stopping, and disabling wpa_supplicant and dhcpcd (prevents conflicts)"
+print_status "Stopping wpa_supplicant and dhcpcd (prevents conflicts, but NOT masking/disabling for remote safety)"
 if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
-    systemctl mask wpa_supplicant || true
     systemctl stop wpa_supplicant || true
-    systemctl disable wpa_supplicant || true
 else
     print_warning "wpa_supplicant.service does not exist. Skipping."
 fi
 if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
     systemctl stop dhcpcd || true
-    systemctl disable dhcpcd || true
-    print_success "dhcpcd stopped and disabled"
+    print_success "dhcpcd stopped"
 else
     print_status "dhcpcd.service does not exist. Skipping."
 fi
@@ -140,7 +145,7 @@ if [ -n "$WPA_PIDS" ]; then
 else
     print_status "No manual wpa_supplicant processes found."
 fi
-print_success "wpa_supplicant masked/stopped/disabled and manual processes killed."
+print_success "wpa_supplicant stopped and manual processes killed."
 
 # 2. Comment out legacy wlan0/eth0 config in /etc/network/interfaces
 IFUPDOWN_CONF="/etc/network/interfaces"
@@ -271,6 +276,14 @@ if [ -f "$NM_MAIN_CONF" ]; then
     print_success "NetworkManager set to manage all interfaces"
 else
     print_warning "$NM_MAIN_CONF does not exist. NetworkManager may not be fully installed or started yet."
+fi
+
+# --- Cancel safety reboot if network is up ---
+if nmcli -t -f STATE general | grep -q 'connected'; then
+    echo "[SAFETY] Network is up. Cancelling rollback reboot timer."
+    kill $SAFETY_PID
+else
+    echo "[SAFETY] Network not detected as up. Rollback reboot will occur unless cancelled manually."
 fi
 
 print_success "NetworkManager mitigations complete. Reboot recommended."
