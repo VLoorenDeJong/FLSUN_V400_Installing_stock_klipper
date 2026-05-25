@@ -59,14 +59,13 @@ PHASE1_SCRIPTS=(
      "update_kernel.sh"
      "upgrade_distro.sh"
      "configure_locale_and_wifi_country.sh"
-    # "add_network_manager.sh"
+     "add_network_manager.sh"
     # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
-     "add_bash_show_branch_name.sh"
+    # "add_bash_show_branch_name.sh"
     # Print Phase 1 completion message before network disruption
-    "print_phase1_success.sh"              # Custom script to notify user before connection loss
-    "mark_phase1_complete.sh"              # Mark Phase 1 as complete
-    "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
-    "reboot.sh"
+    #"print_phase1_success.sh"              # Custom script to notify user before connection loss
+    #"mark_phase1_complete.sh"              # Mark Phase 1 as complete
+    #"add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
 )
 
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
