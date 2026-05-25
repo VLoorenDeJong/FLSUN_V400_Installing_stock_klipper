@@ -66,7 +66,7 @@ PHASE1_SCRIPTS=(
     #"print_phase1_success.sh"              # Custom script to notify user before connection loss
     #"mark_phase1_complete.sh"              # Mark Phase 1 as complete
     #"add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
-    "reboot.sh"                           # final reboot to bring up all services cleanly
+    "reboot.sh"                           # This is for testing
 )
 
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
