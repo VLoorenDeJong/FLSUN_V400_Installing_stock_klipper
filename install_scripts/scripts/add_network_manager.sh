@@ -16,6 +16,17 @@ PSK=""
 if [ -z "$WPA_CONF" ]; then
     echo "=== (CREDENTIALS) WPA_CONF variable is unset or empty; cannot check for WiFi credentials."
     sync
+    # Automatically connect to Wi-Fi using extracted credentials
+    if [ -n "$SSID" ] && [ -n "$PSK" ]; then
+        echo "[AUTO-CONNECT] Attempting to connect to Wi-Fi SSID: $obf_ssid"
+        if nmcli device wifi connect "$SSID" password "$PSK"; then
+            echo "[AUTO-CONNECT] Wi-Fi connection to $obf_ssid successful."
+        else
+            echo "[AUTO-CONNECT] Wi-Fi connection to $obf_ssid failed."
+        fi
+    else
+        echo "[AUTO-CONNECT] SSID or PSK not found, skipping auto-connect."
+    fi
 elif [ -f "$WPA_CONF" ]; then
     SSID=$(awk '/network=\{/{i++} i==2 && /ssid=/{gsub(/.*ssid="|"/,"",$0); print $0}' "$WPA_CONF")
     PSK=$(awk '/network=\{/{i++} i==2 && /psk=/{gsub(/.*psk="|"/,"",$0); print $0}' "$WPA_CONF")
