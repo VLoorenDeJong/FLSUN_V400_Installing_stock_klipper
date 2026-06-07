@@ -178,24 +178,46 @@ fi
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
-# 1. Disable and stop wpa_supplicant and dhcpcd so they do NOT restart after reboot
+# 1. Disable competing network managers so they do NOT restart after reboot.
+#    This system uses systemd-networkd (not dhcpcd) — it MUST be disabled.
+#    wpa_supplicant runs in D-Bus mode (-u -s); NM reuses it, so only STOP it.
 
-print_status "Disabling and stopping dhcpcd and wpa_supplicant (prevents conflicts after reboot)"
+print_status "Disabling systemd-networkd (actual network manager on this system)"
+if systemctl list-unit-files | grep -q '^systemd-networkd\.service'; then
+    systemctl -q disable systemd-networkd 2>/dev/null || true
+    systemctl stop systemd-networkd 2>/dev/null || true
+    print_success "systemd-networkd disabled and stopped"
+else
+    print_status "systemd-networkd.service does not exist. Skipping."
+fi
+
+print_status "Disabling systemd-networkd-wait-online (depends on systemd-networkd)"
+if systemctl list-unit-files | grep -q '^systemd-networkd-wait-online\.service'; then
+    systemctl -q disable systemd-networkd-wait-online 2>/dev/null || true
+    systemctl stop systemd-networkd-wait-online 2>/dev/null || true
+    print_success "systemd-networkd-wait-online disabled and stopped"
+fi
+
+print_status "Stopping wpa_supplicant (NM will reuse it via D-Bus — NOT disabling)"
+# wpa_supplicant runs with -u -s (D-Bus mode); NetworkManager manages it after this point.
+# Disabling would prevent NM from using it for WiFi, so we only stop the standalone service.
 if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
-    systemctl -q disable wpa_supplicant 2>/dev/null || true
     systemctl stop wpa_supplicant 2>/dev/null || true
-    print_success "wpa_supplicant disabled and stopped"
+    print_success "wpa_supplicant stopped (left enabled for NM D-Bus reuse)"
 else
     print_warning "wpa_supplicant.service does not exist. Skipping."
 fi
+
+print_status "Disabling dhcpcd (if present)"
 if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
     systemctl -q disable dhcpcd 2>/dev/null || true
     systemctl stop dhcpcd 2>/dev/null || true
     print_success "dhcpcd disabled and stopped"
 else
-    print_status "dhcpcd.service does not exist. Skipping."
+    print_status "dhcpcd.service not found — skipping (expected on this system)."
 fi
-# --- Extra: kill any manually started wpa_supplicant processes (except those started by NetworkManager) ---
+# Kill any standalone wpa_supplicant processes that are NOT the D-Bus instance NM will reuse.
+# The D-Bus instance (started with -u) will be restarted by NM; interface-bound ones conflict.
 # shellcheck disable=SC2009
 WPA_PIDS=$(pgrep -f wpa_supplicant | while read -r pid; do
     # Check if the process was started by NetworkManager
