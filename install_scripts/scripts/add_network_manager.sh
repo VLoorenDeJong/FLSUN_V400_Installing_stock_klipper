@@ -38,21 +38,75 @@ elif [ -f "$WPA_CONF" ]; then
     export SSID_OBF="$obf_ssid"
     export PSK_OBF="$obf_psk"
     sync
-    # Automatically connect to Wi-Fi using extracted credentials
-    if [ -n "$SSID" ] && [ -n "$PSK" ]; then
-        echo "[AUTO-CONNECT] Attempting to connect to Wi-Fi SSID: $obf_ssid"
-        if nmcli device wifi connect "$SSID" password "$PSK"; then
-            echo "[AUTO-CONNECT] Wi-Fi connection to $obf_ssid successful."
-        else
-            echo "[AUTO-CONNECT] Wi-Fi connection to $obf_ssid failed."
-        fi
-    else
-        echo "[AUTO-CONNECT] SSID or PSK not found, skipping auto-connect."
-    fi
 else
     echo "=== (CREDENTIALS) No wpa_supplicant.conf found to import WiFi credentials"
     sync
 fi
+
+# =============================================================================
+# PRE-FLIGHT DIAGNOSTICS — printed in full BEFORE any service is touched
+# If you lose connection, these lines will already be in the log/terminal.
+# =============================================================================
+echo ""
+echo "============================================================"
+echo "  PRE-FLIGHT DIAGNOSTICS (snapshot before any changes)"
+echo "============================================================"
+
+echo "--- Current IP addresses ---"
+ip addr show 2>/dev/null || echo "ip not available"
+
+echo "--- Default routes ---"
+ip route show 2>/dev/null || echo "ip route not available"
+
+echo "--- DNS resolv.conf ---"
+cat /etc/resolv.conf 2>/dev/null || echo "not found"
+
+echo "--- /etc/network/interfaces ---"
+cat /etc/network/interfaces 2>/dev/null || echo "not found"
+
+echo "--- wpa_supplicant status ---"
+systemctl status wpa_supplicant --no-pager -l 2>/dev/null || echo "service not found"
+
+echo "--- dhcpcd status ---"
+systemctl status dhcpcd --no-pager -l 2>/dev/null || echo "service not found"
+
+echo "--- NetworkManager status ---"
+systemctl status NetworkManager --no-pager -l 2>/dev/null || echo "service not found"
+
+echo "--- /etc/NetworkManager/NetworkManager.conf ---"
+cat /etc/NetworkManager/NetworkManager.conf 2>/dev/null || echo "not found"
+
+echo "--- /etc/NetworkManager/conf.d/ ---"
+ls -la /etc/NetworkManager/conf.d/ 2>/dev/null || echo "not found"
+cat /etc/NetworkManager/conf.d/*.conf 2>/dev/null || true
+
+echo "--- NM connection profiles ---"
+nmcli connection show 2>/dev/null || echo "nmcli not available yet"
+
+echo "--- NM device status ---"
+nmcli device status 2>/dev/null || echo "nmcli not available yet"
+
+echo "--- WiFi scan (current associations) ---"
+nmcli dev wifi list 2>/dev/null || echo "nmcli not available yet"
+
+echo "--- iw reg (WiFi country) ---"
+iw reg get 2>/dev/null || echo "iw not available"
+
+echo "--- wpa_supplicant.conf (redacted PSK) ---"
+if [ -f "/etc/wpa_supplicant/wpa_supplicant.conf" ]; then
+    sed 's/psk=.*/psk=***REDACTED***/' /etc/wpa_supplicant/wpa_supplicant.conf
+else
+    echo "not found"
+fi
+
+echo "--- Systemd enabled unit summary (network-related) ---"
+systemctl list-unit-files --no-pager | grep -E 'dhcpcd|wpa_supplicant|NetworkManager|connman|network' || true
+
+echo "============================================================"
+echo "  END PRE-FLIGHT DIAGNOSTICS"
+echo "============================================================"
+echo ""
+sync
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -124,17 +178,20 @@ fi
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
-# 1. Mask, stop, and disable wpa_supplicant and dhcpcd (if present)
+# 1. Disable and stop wpa_supplicant and dhcpcd so they do NOT restart after reboot
 
-print_status "Stopping wpa_supplicant and dhcpcd (prevents conflicts, but NOT masking/disabling for remote safety)"
+print_status "Disabling and stopping dhcpcd and wpa_supplicant (prevents conflicts after reboot)"
 if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
-    systemctl stop wpa_supplicant || true
+    systemctl -q disable wpa_supplicant 2>/dev/null || true
+    systemctl stop wpa_supplicant 2>/dev/null || true
+    print_success "wpa_supplicant disabled and stopped"
 else
     print_warning "wpa_supplicant.service does not exist. Skipping."
 fi
 if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
-    systemctl stop dhcpcd || true
-    print_success "dhcpcd stopped"
+    systemctl -q disable dhcpcd 2>/dev/null || true
+    systemctl stop dhcpcd 2>/dev/null || true
+    print_success "dhcpcd disabled and stopped"
 else
     print_status "dhcpcd.service does not exist. Skipping."
 fi
@@ -173,17 +230,7 @@ else
     print_status "$IFUPDOWN_CONF does not exist."
 fi
 
-# 3. Print diagnostics for interface and WiFi scan
-print_header "==== Diagnostics: nmcli device status ===="
-nmcli device status || true
-print_header "==== Diagnostics: ip link show wlan0 ===="
-ip link show wlan0 || true
-print_header "==== Diagnostics: nmcli dev wifi list ===="
-nmcli dev wifi list || true
-print_header "==== Diagnostics: iw reg get (country code) ===="
-iw reg get || true
-
-# 2. Extract and print WiFi credentials before any NetworkManager actions
+# 2. Extract WiFi credentials for NetworkManager import
 WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
 SSID=""
 PSK=""
@@ -204,11 +251,13 @@ if [ -f "$WPA_CONF" ]; then
         print_status "Tailing NetworkManager logs in background (see /tmp/nm-tail.log)..."
         journalctl -u NetworkManager -f > /tmp/nm-tail.log 2>&1 &
         TAIL_PID=$!
-        # Ensure NetworkManager is running
+        # Ensure NetworkManager is enabled at boot and running
+        print_status "Enabling NetworkManager at boot..."
+        systemctl enable NetworkManager
         if ! systemctl is-active --quiet NetworkManager; then
             print_status "Starting NetworkManager service..."
-            systemctl start NetworkManager
-            sleep 2
+            systemctl -q --no-block start NetworkManager
+            sleep 3
         fi
         if nmcli connection import type wifi file "$WPA_CONF"; then
             print_success "WiFi credentials imported into NetworkManager"
@@ -235,12 +284,23 @@ if [ -f "$WPA_CONF" ]; then
         print_status "Adding WiFi network ($SSID_OBF) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
             if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
-                print_success "WiFi network ($SSID_OBF) added to NetworkManager"
+                print_success "WiFi network ($SSID_OBF) connected via NetworkManager"
+                # Ensure the connection profile persists and auto-connects after reboot
+                CONN_NAME=$(nmcli -t -f NAME,TYPE connection show --active | awk -F: '$2=="802-11-wireless"{print $1; exit}')
+                if [ -n "$CONN_NAME" ]; then
+                    nmcli connection modify "$CONN_NAME" connection.autoconnect yes
+                    print_success "Auto-connect enabled for profile: $CONN_NAME"
+                else
+                    print_warning "Could not find active WiFi profile to set autoconnect — checking all profiles"
+                    CONN_NAME=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2=="802-11-wireless"{print $1; exit}')
+                    [ -n "$CONN_NAME" ] && nmcli connection modify "$CONN_NAME" connection.autoconnect yes && \
+                        print_success "Auto-connect enabled for profile: $CONN_NAME"
+                fi
             else
-                print_warning "Failed to add WiFi network ($SSID_OBF) to NetworkManager"
+                print_warning "Failed to connect WiFi network ($SSID_OBF) via NetworkManager"
             fi
         else
-            print_warning "Could not extract SSID/PSK for 'MyNetwork' from wpa_supplicant.conf"
+            print_warning "Could not extract SSID/PSK from wpa_supplicant.conf"
         fi
         # --- Check if nmcli settings match ifupdown (interfaces) settings ---
         IFUPDOWN_CONF="/etc/network/interfaces"
