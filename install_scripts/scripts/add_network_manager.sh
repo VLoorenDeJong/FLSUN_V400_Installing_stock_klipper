@@ -297,11 +297,8 @@ if [ -f "$WPA_CONF" ]; then
             systemctl -q --no-block start NetworkManager
             sleep 3
         fi
-        if nmcli connection import type wifi file "$WPA_CONF"; then
-            print_success "WiFi credentials imported into NetworkManager"
-        else
-            print_warning "Could not import WiFi credentials (may already exist or not needed)"
-        fi
+        # Give NM a moment to settle before making profile changes
+        sleep 2
         # Stop tailing logs after main NM actions
         if [ -n "$TAIL_PID" ]; then
             kill $TAIL_PID >/dev/null 2>&1
@@ -318,24 +315,35 @@ if [ -f "$WPA_CONF" ]; then
             cp /tmp/nm-tail.log "$LOG_DEST"
             print_warning "Could not write to /var/log, log saved to $LOG_DEST instead."
         fi
-        # --- Add only the second network block (MyNetwork/MyPassword) to NetworkManager ---
+        # --- Delete all stale NM WiFi profiles before adding a clean one ---
+        print_status "Removing any existing NM WiFi profiles (avoids stale/duplicate profiles)"
+        nmcli -t -f NAME,TYPE connection show | awk -F: '$2=="802-11-wireless"{print $1}' | while read -r old_profile; do
+            nmcli connection delete "$old_profile" && print_success "Deleted stale profile: $old_profile" || true
+        done
+
+        # --- Add a single clean WiFi profile with autoconnect and bring it up ---
         print_status "Adding WiFi network ($SSID_OBF) to NetworkManager"
         if [ -n "$SSID" ] && [ -n "$PSK" ]; then
-            if nmcli dev wifi connect "$SSID" password "$PSK" ifname wlan0; then
-                print_success "WiFi network ($SSID_OBF) connected via NetworkManager"
-                # Ensure the connection profile persists and auto-connects after reboot
-                CONN_NAME=$(nmcli -t -f NAME,TYPE connection show --active | awk -F: '$2=="802-11-wireless"{print $1; exit}')
-                if [ -n "$CONN_NAME" ]; then
-                    nmcli connection modify "$CONN_NAME" connection.autoconnect yes
-                    print_success "Auto-connect enabled for profile: $CONN_NAME"
-                else
-                    print_warning "Could not find active WiFi profile to set autoconnect — checking all profiles"
-                    CONN_NAME=$(nmcli -t -f NAME,TYPE connection show | awk -F: '$2=="802-11-wireless"{print $1; exit}')
-                    [ -n "$CONN_NAME" ] && nmcli connection modify "$CONN_NAME" connection.autoconnect yes && \
-                        print_success "Auto-connect enabled for profile: $CONN_NAME"
-                fi
+            # Add the profile explicitly — no import, no duplicate creation
+            if nmcli connection add \
+                type wifi \
+                ifname wlan0 \
+                con-name "$SSID" \
+                ssid "$SSID" \
+                wifi-sec.key-mgmt wpa-psk \
+                wifi-sec.psk "$PSK" \
+                connection.autoconnect yes \
+                connection.autoconnect-priority 10; then
+                print_success "WiFi profile '$SSID_OBF' created with autoconnect"
             else
-                print_warning "Failed to connect WiFi network ($SSID_OBF) via NetworkManager"
+                print_warning "Failed to add WiFi profile for $SSID_OBF"
+            fi
+            # Bring the connection up explicitly
+            print_status "Bringing up WiFi connection ($SSID_OBF)..."
+            if nmcli connection up "$SSID"; then
+                print_success "WiFi connected: $SSID_OBF"
+            else
+                print_warning "nmcli connection up failed — NM will retry autoconnect on reboot"
             fi
         else
             print_warning "Could not extract SSID/PSK from wpa_supplicant.conf"
