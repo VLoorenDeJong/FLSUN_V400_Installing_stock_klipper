@@ -198,6 +198,22 @@ if systemctl list-unit-files | grep -q '^systemd-networkd-wait-online\.service';
     print_success "systemd-networkd-wait-online disabled and stopped"
 fi
 
+print_status "Disabling networkd-dispatcher (companion to systemd-networkd, can re-activate it)"
+if systemctl list-unit-files | grep -q '^networkd-dispatcher\.service'; then
+    systemctl -q disable networkd-dispatcher 2>/dev/null || true
+    systemctl stop networkd-dispatcher 2>/dev/null || true
+    print_success "networkd-dispatcher disabled and stopped"
+else
+    print_status "networkd-dispatcher.service not found — skipping."
+fi
+
+print_status "Disabling systemd-networkd.socket (can re-activate systemd-networkd)"
+if systemctl list-unit-files | grep -q '^systemd-networkd\.socket'; then
+    systemctl -q disable systemd-networkd.socket 2>/dev/null || true
+    systemctl stop systemd-networkd.socket 2>/dev/null || true
+    print_success "systemd-networkd.socket disabled and stopped"
+fi
+
 print_status "Stopping wpa_supplicant (NM will reuse it via D-Bus — NOT disabling)"
 # wpa_supplicant runs with -u -s (D-Bus mode); NetworkManager manages it after this point.
 # Disabling would prevent NM from using it for WiFi, so we only stop the standalone service.
@@ -358,7 +374,26 @@ mkdir -p "$NM_CONF_DIR"
 echo -e "[main]\nauth-polkit=false" > "$NM_CONF_FILE"
 chmod 644 "$NM_CONF_FILE"
 
-# 4. Set NetworkManager to manage all interfaces
+# 4. Configure NM to use systemd-resolved for DNS (resolv.conf is managed by systemd-resolved on this system)
+print_status "Configuring NetworkManager to hand DNS to systemd-resolved"
+NM_DNS_CONF="${NM_CONF_DIR}/dns.conf"
+cat > "$NM_DNS_CONF" <<'EOF'
+[main]
+dns=systemd-resolved
+EOF
+chmod 644 "$NM_DNS_CONF"
+# Ensure the symlink that systemd-resolved expects is in place
+if [ "$(readlink /etc/resolv.conf)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    print_success "Linked /etc/resolv.conf -> /run/systemd/resolve/stub-resolv.conf"
+else
+    print_success "resolv.conf symlink already correct"
+fi
+systemctl enable systemd-resolved 2>/dev/null || true
+systemctl start systemd-resolved 2>/dev/null || true
+print_success "NetworkManager DNS handed to systemd-resolved"
+
+# 5. Set NetworkManager to manage all interfaces (ifupdown not present, but set for safety)
 NM_MAIN_CONF="/etc/NetworkManager/NetworkManager.conf"
 if [ -f "$NM_MAIN_CONF" ]; then
     if grep -q '^managed=' "$NM_MAIN_CONF"; then
