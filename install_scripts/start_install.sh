@@ -51,7 +51,7 @@ bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
     "set_scripts_executable.sh"
-    "update_user_password.sh"   # Interactive — prompts for new password
+    "change_username_password.sh"   # Interactive — rename current user and/or set new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
     "cleanup_repositories.sh"
     "add_ssh.sh"
@@ -60,7 +60,6 @@ PHASE1_SCRIPTS=(
     "upgrade_distro.sh"
     "configure_locale_and_wifi_country.sh"
     "add_network_manager.sh"
-    "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
     "add_bash_show_branch_name.sh"
     # Print Phase 1 completion message before network disruption
     "print_phase1_success.sh"              # Custom script to notify user before connection loss
