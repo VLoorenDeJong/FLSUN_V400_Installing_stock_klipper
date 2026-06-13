@@ -38,11 +38,11 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# Migrate old phase marker files if needed
-bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INSTALL_DIR="$SCRIPT_DIR/scripts"
+
+# Migrate old phase marker files if needed
+bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
 
 # =============================================================================
 # PHASE DEFINITIONS
@@ -50,22 +50,22 @@ INSTALL_DIR="$SCRIPT_DIR/scripts"
 
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
-     "set_scripts_executable.sh"
-     "update_user_password.sh"   # Interactive — prompts for new password
-    #  "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
-    #  "cleanup_repositories.sh"
-    #  "add_ssh.sh"
-    #  "updates_install_and_clean.sh"
-    #  "update_kernel.sh"
-    #  "upgrade_distro.sh"
-    #  "configure_locale_and_wifi_country.sh"
-     "add_network_manager.sh"
-    # "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
-    # "add_bash_show_branch_name.sh"
+    "set_scripts_executable.sh"
+    "update_user_password.sh"   # Interactive — prompts for new password
+    "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
+    "cleanup_repositories.sh"
+    "add_ssh.sh"
+    "updates_install_and_clean.sh"
+    "update_kernel.sh"
+    "upgrade_distro.sh"
+    "configure_locale_and_wifi_country.sh"
+    "add_network_manager.sh"
+    "add_ufw.sh"  # Disabled: Speeder Pad kernel image lacks required netfilter modules    
+    "add_bash_show_branch_name.sh"
     # Print Phase 1 completion message before network disruption
-    #"print_phase1_success.sh"              # Custom script to notify user before connection loss
-    #"mark_phase1_complete.sh"              # Mark Phase 1 as complete
-    #"add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
+    "print_phase1_success.sh"              # Custom script to notify user before connection loss
+    "mark_phase1_complete.sh"              # Mark Phase 1 as complete
+    "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
     "reboot.sh"                           # This is for testing
 )
 
