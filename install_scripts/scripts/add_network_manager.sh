@@ -47,65 +47,65 @@ fi
 # PRE-FLIGHT DIAGNOSTICS — printed in full BEFORE any service is touched
 # If you lose connection, these lines will already be in the log/terminal.
 # =============================================================================
-echo ""
-echo "============================================================"
-echo "  PRE-FLIGHT DIAGNOSTICS (snapshot before any changes)"
-echo "============================================================"
 
-echo "--- Current IP addresses ---"
-ip addr show 2>/dev/null || echo "ip not available"
+# Inline helpers (print_* defined later; these carry us through pre-flight)
+_hdr()  { printf "\n\033[36m  ┌─ %s\033[0m\n" "$1"; }
+_val()  { printf "\033[90m  │\033[0m  %s\n" "$1"; }
+_none() { printf "\033[90m  │  (none / not found)\033[0m\n"; }
 
-echo "--- Default routes ---"
-ip route show 2>/dev/null || echo "ip route not available"
+printf "\n\033[36m╔══════════════════════════════════════════════════════╗\033[0m\n"
+printf   "\033[36m║   PRE-FLIGHT DIAGNOSTICS  (before any changes)      ║\033[0m\n"
+printf   "\033[36m╚══════════════════════════════════════════════════════╝\033[0m\n"
 
-echo "--- DNS resolv.conf ---"
-cat /etc/resolv.conf 2>/dev/null || echo "not found"
+_hdr "IP addresses"
+ip addr show 2>/dev/null | grep -E '^\s*(inet|inet6|[0-9]+:)' | while IFS= read -r line; do _val "$line"; done || _none
 
-echo "--- /etc/network/interfaces ---"
-cat /etc/network/interfaces 2>/dev/null || echo "not found"
+_hdr "Default routes"
+ip route show 2>/dev/null | while IFS= read -r line; do _val "$line"; done || _none
 
-echo "--- wpa_supplicant status ---"
-systemctl status wpa_supplicant --no-pager -l 2>/dev/null || echo "service not found"
+_hdr "DNS  (/etc/resolv.conf)"
+grep -v '^\s*#' /etc/resolv.conf 2>/dev/null | grep -v '^\s*$' | while IFS= read -r line; do _val "$line"; done || _none
 
-echo "--- dhcpcd status ---"
-systemctl status dhcpcd --no-pager -l 2>/dev/null || echo "service not found"
+_hdr "/etc/network/interfaces"
+grep -v '^\s*#' /etc/network/interfaces 2>/dev/null | grep -v '^\s*$' | while IFS= read -r line; do _val "$line"; done || _none
 
-echo "--- NetworkManager status ---"
-systemctl status NetworkManager --no-pager -l 2>/dev/null || echo "service not found"
-
-echo "--- /etc/NetworkManager/NetworkManager.conf ---"
-cat /etc/NetworkManager/NetworkManager.conf 2>/dev/null || echo "not found"
-
-echo "--- /etc/NetworkManager/conf.d/ ---"
-ls -la /etc/NetworkManager/conf.d/ 2>/dev/null || echo "not found"
-cat /etc/NetworkManager/conf.d/*.conf 2>/dev/null || true
-
-echo "--- NM connection profiles ---"
-nmcli connection show 2>/dev/null || echo "nmcli not available yet"
-
-echo "--- NM device status ---"
-nmcli device status 2>/dev/null || echo "nmcli not available yet"
-
-echo "--- WiFi scan (current associations) ---"
-nmcli dev wifi list 2>/dev/null || echo "nmcli not available yet"
-
-echo "--- iw reg (WiFi country) ---"
-iw reg get 2>/dev/null || echo "iw not available"
-
-echo "--- wpa_supplicant.conf (redacted PSK) ---"
+_hdr "wpa_supplicant.conf  (PSK redacted)"
 if [ -f "/etc/wpa_supplicant/wpa_supplicant.conf" ]; then
-    sed 's/psk=.*/psk=***REDACTED***/' /etc/wpa_supplicant/wpa_supplicant.conf
+    sed 's/psk=.*/psk=***REDACTED***/' /etc/wpa_supplicant/wpa_supplicant.conf \
+        | grep -v '^\s*#' | grep -v '^\s*$' | while IFS= read -r line; do _val "$line"; done
 else
-    echo "not found"
+    _none
 fi
 
-echo "--- Systemd enabled unit summary (network-related) ---"
-systemctl list-unit-files --no-pager | grep -E 'dhcpcd|wpa_supplicant|NetworkManager|connman|network' || true
+_hdr "Service states  (network-related)"
+for svc in wpa_supplicant dhcpcd NetworkManager systemd-networkd connman; do
+    if systemctl list-unit-files --no-pager 2>/dev/null | grep -q "^${svc}\.service"; then
+        state=$(systemctl is-active "$svc" 2>/dev/null || echo "inactive")
+        enabled=$(systemctl is-enabled "$svc" 2>/dev/null || echo "disabled")
+        _val "$(printf '%-32s  active=%-10s  enabled=%s' "$svc" "$state" "$enabled")"
+    fi
+done
 
-echo "============================================================"
-echo "  END PRE-FLIGHT DIAGNOSTICS"
-echo "============================================================"
-echo ""
+_hdr "NM connection profiles"
+nmcli -t -f NAME,TYPE,STATE connection show 2>/dev/null \
+    | while IFS=: read -r name type state; do _val "$(printf '%-30s  %-25s  %s' "$name" "$type" "$state")"; done \
+    || _none
+
+_hdr "NM device status"
+nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device status 2>/dev/null \
+    | while IFS=: read -r dev type state conn; do _val "$(printf '%-12s  %-12s  %-15s  %s' "$dev" "$type" "$state" "$conn")"; done \
+    || _none
+
+if [[ "${FLSUN_DEBUG:-0}" -eq 1 ]]; then
+    _hdr "NM conf.d"
+    ls /etc/NetworkManager/conf.d/ 2>/dev/null | while IFS= read -r f; do _val "$f"; done || _none
+    cat /etc/NetworkManager/conf.d/*.conf 2>/dev/null | while IFS= read -r line; do _val "$line"; done || true
+
+    _hdr "iw reg  (WiFi country)"
+    iw reg get 2>/dev/null | while IFS= read -r line; do _val "$line"; done || _none
+fi
+
+printf "\n\033[36m══════════════════════════════════════════════════════\033[0m\n\n"
 sync
 
 export DEBIAN_FRONTEND=noninteractive
@@ -285,10 +285,13 @@ fi
 if [ -f "$WPA_CONF" ]; then
     print_status "Importing WiFi credentials from wpa_supplicant.conf into NetworkManager"
     if command -v nmcli >/dev/null 2>&1; then
-        # Start tailing NetworkManager logs in background for debugging
-        print_status "Tailing NetworkManager logs in background (see /tmp/nm-tail.log)..."
-        journalctl -u NetworkManager -f > /tmp/nm-tail.log 2>&1 &
-        TAIL_PID=$!
+        # Start tailing NetworkManager logs in background (debug mode only)
+        TAIL_PID=""
+        if [[ "${FLSUN_DEBUG:-0}" -eq 1 ]]; then
+            print_status "Tailing NetworkManager logs in background (see /tmp/nm-tail.log)..."
+            journalctl -u NetworkManager -f > /tmp/nm-tail.log 2>&1 &
+            TAIL_PID=$!
+        fi
         # Ensure NetworkManager is enabled at boot and running
         print_status "Enabling NetworkManager at boot..."
         systemctl enable NetworkManager
@@ -299,21 +302,20 @@ if [ -f "$WPA_CONF" ]; then
         fi
         # Give NM a moment to settle before making profile changes
         sleep 2
-        # Stop tailing logs after main NM actions
-        if [ -n "$TAIL_PID" ]; then
+        # Stop tailing logs and print if in debug mode
+        if [[ "${FLSUN_DEBUG:-0}" -eq 1 ]] && [ -n "$TAIL_PID" ]; then
             kill $TAIL_PID >/dev/null 2>&1
-        fi
-        # Save and print last 100 lines of NM log
-        print_header "==== NetworkManager log tail (last 100 lines) ===="
-        tail -100 /tmp/nm-tail.log
-        # Preserve the log for later review
-        LOG_DEST="/var/log/nm-tail.log"
-        if cp /tmp/nm-tail.log "$LOG_DEST" 2>/dev/null; then
-            print_status "Full NetworkManager log preserved at $LOG_DEST"
-        else
-            LOG_DEST="$HOME/nm-tail.log"
-            cp /tmp/nm-tail.log "$LOG_DEST"
-            print_warning "Could not write to /var/log, log saved to $LOG_DEST instead."
+            print_header "==== NetworkManager log tail (last 100 lines) ===="
+            tail -100 /tmp/nm-tail.log
+            # Preserve the log for later review
+            LOG_DEST="/var/log/nm-tail.log"
+            if cp /tmp/nm-tail.log "$LOG_DEST" 2>/dev/null; then
+                print_status "Full NetworkManager log preserved at $LOG_DEST"
+            else
+                LOG_DEST="$HOME/nm-tail.log"
+                cp /tmp/nm-tail.log "$LOG_DEST"
+                print_warning "Could not write to /var/log, log saved to $LOG_DEST instead."
+            fi
         fi
         # --- Delete all stale NM WiFi profiles before adding a clean one ---
         print_status "Removing any existing NM WiFi profiles (avoids stale/duplicate profiles)"
@@ -348,7 +350,8 @@ if [ -f "$WPA_CONF" ]; then
         else
             print_warning "Could not extract SSID/PSK from wpa_supplicant.conf"
         fi
-        # --- Check if nmcli settings match ifupdown (interfaces) settings ---
+        # --- Check if nmcli settings match ifupdown (interfaces) settings (debug only) ---
+        if [[ "${FLSUN_DEBUG:-0}" -eq 1 ]]; then
         IFUPDOWN_CONF="/etc/network/interfaces"
         if [ -f "$IFUPDOWN_CONF" ]; then
             print_status "Comparing NetworkManager and ifupdown (interfaces) network settings..."
@@ -370,6 +373,7 @@ if [ -f "$WPA_CONF" ]; then
                 fi
             done
         fi
+        fi  # end FLSUN_DEBUG interface comparison
     else
         print_error "nmcli not found after supposed install. Skipping WiFi import."
     fi

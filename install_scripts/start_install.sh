@@ -129,6 +129,7 @@ run_script() {
     echo -e "\e[34m🚀 Running: $script_name\e[0m"
     local run_cmd="bash"
     [[ "$debugMode" -eq 1 ]] && run_cmd="bash -x"
+    export FLSUN_DEBUG=$debugMode
 
     # Redirect stdin from /dev/tty so child scripts read from the terminal
     # directly and cannot exhaust the parent script's stdin.
