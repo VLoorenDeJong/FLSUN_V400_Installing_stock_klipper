@@ -71,7 +71,6 @@ PHASE1_SCRIPTS=(
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
-    "mark_phase2_complete.sh"             # Mark Phase 2 as complete
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
     "install_python39.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
@@ -83,6 +82,7 @@ PHASE2_SCRIPTS=(
     "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
     "add_usb_symlink.sh"                  # ln -s gcode_files/USB-Disk printer_data/gcodes/
     "fix_moonraker_shutdown.sh"           # policykit rules + [machine] shutdown_action
+    "mark_phase2_complete.sh"             # Mark Phase 2 as complete
     "reboot.sh"                           # final reboot to bring up all services cleanly
 )
 
@@ -122,7 +122,7 @@ run_script() {
         updates_install_and_clean.sh|update_kernel.sh|upgrade_distro.sh|\
         add_network_manager.sh|add_flsun_speeder_pad_installer.sh|\
         add_flsun_sp_installer2.sh|add_kiauh.sh|add_webmin.sh|\
-        add_apache_webserver.sh|add_smb.sh|install_python39.sh)
+        add_apache_webserver.sh|add_smb.sh|install_python39.sh|fix_klipper_venv.sh)
             run_lock_fix ;;
     esac
 

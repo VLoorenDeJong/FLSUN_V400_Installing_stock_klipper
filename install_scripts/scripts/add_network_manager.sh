@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "\e[31m❌ This script must run as root. Use: sudo bash $0\e[0m"
+    exit 1
+fi
+
 # --- SAFETY NET: Timed rollback for remote SSH ---
 # This will reboot the device in 5 minutes unless you cancel it (kill %1 or pkill -f 'sleep 300 && reboot')
 (
-    sleep 300 && echo "[SAFETY] No cancel detected, rebooting to restore network..." && reboot
+    sleep 300
+    echo "[SAFETY] No cancel detected, rebooting to restore network..."
+    if [ "$(id -u)" -eq 0 ]; then
+        systemctl --no-wall reboot 2>/dev/null || reboot
+    else
+        echo "[SAFETY] Not running as root; skipping automatic reboot."
+    fi
 ) &
 SAFETY_PID=$!
 echo "[SAFETY] Rollback timer started (PID $SAFETY_PID). If network is up and stable, run: kill $SAFETY_PID to cancel reboot."
@@ -118,8 +129,16 @@ show_progress() {
     local command="$2"
     local interval="${3:-3}"
     local timeout="${4:-300}"
+    local log_file="/tmp/flsun-progress-$(date +%s)-$$.log"
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    if [[ "${FLSUN_DEBUG:-0}" -eq 1 ]]; then
+        eval "$command" &
+    else
+        # Keep normal mode concise; preserve full command output in a temp log.
+        eval "$command" >"$log_file" 2>&1 &
+    fi
+
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -139,6 +158,12 @@ show_progress() {
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
+
+    if [[ $exit_code -ne 0 && "${FLSUN_DEBUG:-0}" -ne 1 ]]; then
+        print_warning "Command failed. Showing last 40 log lines: $log_file"
+        tail -40 "$log_file" 2>/dev/null || true
+    fi
+
     return $exit_code
 }
 

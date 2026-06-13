@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "\e[31m❌ This script must run as root. Use: sudo bash $0\e[0m"
+    exit 1
+fi
+
 # Print current IP addresses so the user knows how to reconnect via SSH after reboot
 echo ""
 echo -e "\e[36m╔══════════════════════════════════════════════════════════════╗\e[0m"
@@ -35,4 +40,4 @@ echo ""
 echo "Waiting 15 seconds before rebooting..."
 sleep 15
 echo "Rebooting the system..."
-reboot
+systemctl --no-wall reboot 2>/dev/null || reboot

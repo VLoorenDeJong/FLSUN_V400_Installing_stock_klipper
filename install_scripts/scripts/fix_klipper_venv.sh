@@ -36,6 +36,25 @@ PYTHON="${KLIPPY_ENV}/bin/python"
 
 print_header "Fix Klipper Virtual Environment (steps 093.2-093.8)"
 
+# --- Ensure system deps needed by some Python packages (e.g. sdbus) ---
+print_status "Checking system build dependencies (pkg-config, libsystemd-dev)..."
+MISSING_DEPS=()
+for pkg in pkg-config libsystemd-dev; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        MISSING_DEPS+=("$pkg")
+    fi
+done
+
+if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+    print_status "Installing missing packages: ${MISSING_DEPS[*]}"
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get install -y -qq "${MISSING_DEPS[@]}"
+    print_success "System build dependencies installed"
+else
+    print_success "System build dependencies already installed"
+fi
+
 # --- Validate paths ---
 if [ ! -f "$PIP" ]; then
     print_warning "klippy-env not found at $KLIPPY_ENV"
