@@ -204,10 +204,27 @@ else
     print_success "Added [exclude_object] section"
 fi
 
+
+# ---------------------------------------------------------------------------
+#  FIX PERMISSIONS FOR MOONRAKER + MAINSAIL
+# ---------------------------------------------------------------------------
+
+print_status "Fixing permissions for printer_data..."
+
+sudo chown -R pi:pi /home/pi/printer_data
+sudo chmod -R 775 /home/pi/printer_data
+
+print_success "Permissions repaired."
+
+print_status "Restarting Moonraker..."
+sudo systemctl restart moonraker
+print_success "Moonraker restarted."
+
 print_success "KlipperScreen + MCU serial + Exclude Object configuration completed."
-echo
-echo "➡ After Phase 2 reboot, Moonraker will automatically load:"
-echo "   • Updated [mcu] serial"
-echo "   • KlipperScreen update manager"
-echo "   • Exclude Object Support (file_manager + exclude_object)"
-echo
+# Fix permissions for .theme folder (custom CSS)
+if [ -d "/home/pi/printer_data/config/.theme" ]; then
+    print_status "Fixing permissions for .theme folder..."
+    sudo chown -R pi:pi /home/pi/printer_data/config/.theme
+    sudo chmod -R 775 /home/pi/printer_data/config/.theme
+    print_success ".theme permissions repaired."
+fi
