@@ -31,9 +31,12 @@ print_error() {
 
 print_status "Preparing Mainsail theme installation..."
 
-# Determine script directory and repo root
+# Determine script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Repo root is TWO levels up:
+# install_scripts/scripts  →  install_scripts  →  repo root
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 # Theme source folder inside repo
 THEME_SOURCE="$REPO_ROOT/backup_config/KlipperThemeFiles"
@@ -63,7 +66,7 @@ print_status "Locating theme source files..."
 
 if [ ! -d "$THEME_SOURCE" ]; then
     print_error "Theme source folder not found: $THEME_SOURCE"
-    print_warning "Make sure backup_config/KlipperThemeFiles exists in the repo."
+    print_warning "Expected path: FLSUN_V400_Installing_stock_klipper/backup_config/KlipperThemeFiles"
     exit 1
 fi
 
