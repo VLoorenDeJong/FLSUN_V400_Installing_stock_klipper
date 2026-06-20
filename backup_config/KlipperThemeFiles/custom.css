@@ -1,0 +1,26 @@
+/*
+theme for mainsail.
+By Zzcatvs
+*/
+
+:root {
+    --Primary:        #2196f3;    /*Eryone:blue*/
+    --Secondary:      #808080;    /*Eryone:CurrentLine*/
+    --Green:          #4bad4f;    /*Eryone:Green*/
+    --Red:            #f44336;    /*Eryone:Red*/
+    --Warnings:       #bf891d;    /*Eryone:Amber*/
+    --Text:           #f2f2f2;    /*Eryone:Foreground*/
+    --DarkerText:     #e0e0e0;    
+    --Background:     #282828;    /*Eryone:CurrentLine*/
+    --DarkBackground: #121212;    /*Eryone:Background*/
+    --Toolbars:       #282828;    /*Eryone:CurrentLine*/
+    --Sheets:         #121212;    /*Eryone:Background*/
+}
+.v-application {
+    --v-primary-base: var(--Primary) !important;
+    --v-anchor-base:  var(--Primary) !important;
+    --v-error-base:   var(--Red) !important;
+    --v-success-base: var(--Green) !important;
+    --v-warning-base: var(--Warnings) !important;
+    --v-panel-base:   var(--DarkBackground) !important;
+}

@@ -150,3 +150,64 @@ requirements: scripts/KlipperScreen-requirements.txt
 system_dependencies: scripts/system-dependencies.json
 managed_services: KlipperScreen"
 
+if grep -q "^
+
+\[update_manager KlipperScreen\]
+
+" "$MOONRAKER_CONF"; then
+    print_warning "KlipperScreen update_manager block already present"
+else
+    print_status "Adding KlipperScreen update_manager block..."
+    {
+        echo ""
+        echo "$UPDATE_BLOCK"
+    } >> "$MOONRAKER_CONF"
+    print_success "Added KlipperScreen update_manager block"
+fi
+
+# ---------------------------------------------------------------------------
+#  EXCLUDE OBJECT SUPPORT — Moonraker + printer.cfg
+# ---------------------------------------------------------------------------
+
+print_status "Ensuring [file_manager] section exists in moonraker.conf..."
+
+if grep -q "^
+
+\[file_manager\]
+
+" "$MOONRAKER_CONF"; then
+    print_success "[file_manager] section already present"
+else
+    print_status "Adding [file_manager] section at EOF..."
+    {
+        echo ""
+        echo "[file_manager]"
+        echo "enable_object_processing: True"
+    } >> "$MOONRAKER_CONF"
+    print_success "Added [file_manager] section"
+fi
+
+print_status "Ensuring [exclude_object] section exists in printer.cfg..."
+
+if grep -q "^
+
+\[exclude_object\]
+
+" "$PRINTER_CFG"; then
+    print_success "[exclude_object] section already present"
+else
+    print_status "Adding [exclude_object] section at EOF..."
+    {
+        echo ""
+        echo "[exclude_object]"
+    } >> "$PRINTER_CFG"
+    print_success "Added [exclude_object] section"
+fi
+
+print_success "KlipperScreen + MCU serial + Exclude Object configuration completed."
+echo
+echo "➡ After Phase 2 reboot, Moonraker will automatically load:"
+echo "   • Updated [mcu] serial"
+echo "   • KlipperScreen update manager"
+echo "   • Exclude Object Support (file_manager + exclude_object)"
+echo
