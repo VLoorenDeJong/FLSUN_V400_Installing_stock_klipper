@@ -70,46 +70,70 @@ fi
 print_success "Detected MCU serial: $MCU_SERIAL"
 
 # ---------------------------------------------------------------------------
-#  FIXED, BULLETPROOF MCU SERIAL INJECTION (NO regex, NO awk regex)
+#  PURE UNIX MCU SERIAL INJECTION — NO REGEX, NO AWK, NO SED RANGES
 # ---------------------------------------------------------------------------
 
 print_status "Updating [mcu] serial in printer.cfg..."
 
-# Find the line number of the [mcu] section (literal match)
-MCU_START=$(grep -n "^
+TMP_FILE=$(mktemp)
 
-\[mcu\]
+in_mcu_block=false
+serial_written=false
+mcu_found=false
 
-" "$PRINTER_CFG" | cut -d: -f1 || true)
+while IFS= read -r line; do
+    # Detect start of [mcu]
+    if [[ "$line" == "[mcu]" ]]; then
+        mcu_found=true
+        in_mcu_block=true
+        echo "$line" >> "$TMP_FILE"
+        continue
+    fi
 
-if [ -z "$MCU_START" ]; then
-    print_warning "[mcu] section not found, appending new section..."
+    # Detect next section header
+    if [[ "$line" == [* ]]; then
+        if $in_mcu_block && ! $serial_written; then
+            echo "serial: $MCU_SERIAL" >> "$TMP_FILE"
+            serial_written=true
+        fi
+        in_mcu_block=false
+        echo "$line" >> "$TMP_FILE"
+        continue
+    fi
+
+    # Inside [mcu] block
+    if $in_mcu_block; then
+        if [[ "$line" == serial:* ]]; then
+            echo "serial: $MCU_SERIAL" >> "$TMP_FILE"
+            serial_written=true
+        else
+            echo "$line" >> "$TMP_FILE"
+        fi
+        continue
+    fi
+
+    # Normal line
+    echo "$line" >> "$TMP_FILE"
+
+done < "$PRINTER_CFG"
+
+# If [mcu] existed but serial was never written
+if $mcu_found && ! $serial_written; then
+    echo "serial: $MCU_SERIAL" >> "$TMP_FILE"
+fi
+
+# If [mcu] never existed, append at EOF
+if ! $mcu_found; then
+    print_warning "[mcu] section not found, appending at EOF..."
     {
         echo ""
         echo "[mcu]"
         echo "serial: $MCU_SERIAL"
-    } >> "$PRINTER_CFG"
-    print_success "Appended new [mcu] section with serial"
-else
-    # Find next section header literally starting with '['
-    MCU_END=$(awk -v start="$MCU_START" '
-        NR > start && substr($0,1,1) == "[" { print NR; exit }
-    ' "$PRINTER_CFG")
-
-    # If no next section, use end of file
-    [ -z "$MCU_END" ] && MCU_END=$(wc -l < "$PRINTER_CFG")
-
-    # Check if serial line exists inside the block
-    if sed -n "${MCU_START},${MCU_END}p" "$PRINTER_CFG" | grep -q "^serial:"; then
-        print_status "Replacing existing serial line..."
-        sed -i "${MCU_START},${MCU_END}s|^serial:.*|serial: $MCU_SERIAL|" "$PRINTER_CFG"
-    else
-        print_status "Adding missing serial line to [mcu] block..."
-        sed -i "$((MCU_START+1))i serial: $MCU_SERIAL" "$PRINTER_CFG"
-    fi
-
-    print_success "Updated [mcu] serial in printer.cfg"
+    } >> "$TMP_FILE"
 fi
+
+mv "$TMP_FILE" "$PRINTER_CFG"
+print_success "Updated [mcu] serial in printer.cfg"
 
 # ---------------------------------------------------------------------------
 #  UPDATE MANAGER BLOCK FOR KLIPPERSCREEN
@@ -125,26 +149,3 @@ virtualenv: $KS_VENV
 requirements: scripts/KlipperScreen-requirements.txt
 system_dependencies: scripts/system-dependencies.json
 managed_services: KlipperScreen
-"
-
-if grep -q "^
-
-\[update_manager KlipperScreen\]
-
-" "$MOONRAKER_CONF"; then
-    print_warning "KlipperScreen update_manager block already present"
-else
-    print_status "Adding KlipperScreen update_manager block..."
-    {
-        echo ""
-        echo "$UPDATE_BLOCK"
-    } >> "$MOONRAKER_CONF"
-    print_success "Added KlipperScreen update_manager block"
-fi
-
-print_success "KlipperScreen + MCU serial configuration completed."
-echo
-echo "➡ After Phase 2 reboot, Moonraker will automatically load:"
-echo "   • Updated [mcu] serial"
-echo "   • KlipperScreen update manager"
-echo
