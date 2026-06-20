@@ -40,27 +40,21 @@ PRINTER_CFG="$ACTUAL_HOME/printer_data/config/printer.cfg"
 
 print_status "Verifying KlipperScreen and Klipper configuration paths..."
 
-# Verify KlipperScreen repo
 [ -d "$KS_PATH" ] && print_success "KlipperScreen folder found: $KS_PATH" \
     || { print_error "KlipperScreen folder missing: $KS_PATH"; exit 1; }
 
-# Verify KlipperScreen venv
 [ -d "$KS_VENV" ] && print_success "KlipperScreen virtualenv found: $KS_VENV" \
     || { print_error "KlipperScreen virtualenv missing: $KS_VENV"; exit 1; }
 
-# Verify requirements file
 [ -f "$KS_REQ" ] && print_success "KlipperScreen requirements file found: $KS_REQ" \
     || { print_error "KlipperScreen requirements file missing: $KS_REQ"; exit 1; }
 
-# Verify system dependencies file
 [ -f "$KS_SYS" ] && print_success "KlipperScreen system-dependencies.json found: $KS_SYS" \
     || { print_error "KlipperScreen system-dependencies.json missing: $KS_SYS"; exit 1; }
 
-# Verify Moonraker config
 [ -f "$MOONRAKER_CONF" ] && print_success "Moonraker config found: $MOONRAKER_CONF" \
     || { print_error "Moonraker config missing: $MOONRAKER_CONF"; exit 1; }
 
-# Verify printer.cfg
 [ -f "$PRINTER_CFG" ] && print_success "printer.cfg found: $PRINTER_CFG" \
     || { print_error "printer.cfg missing: $PRINTER_CFG"; exit 1; }
 
@@ -76,12 +70,12 @@ fi
 print_success "Detected MCU serial: $MCU_SERIAL"
 
 # ---------------------------------------------------------------------------
-#  FIXED, BULLETPROOF MCU SERIAL INJECTION (NO sed ranges, no failures)
+#  FIXED, BULLETPROOF MCU SERIAL INJECTION (NO regex, NO awk regex)
 # ---------------------------------------------------------------------------
 
 print_status "Updating [mcu] serial in printer.cfg..."
 
-# Find the line number of the [mcu] section
+# Find the line number of the [mcu] section (literal match)
 MCU_START=$(grep -n "^
 
 \[mcu\]
@@ -97,12 +91,10 @@ if [ -z "$MCU_START" ]; then
     } >> "$PRINTER_CFG"
     print_success "Appended new [mcu] section with serial"
 else
-    # Find next section header after [mcu]
-    MCU_END=$(awk "NR>$MCU_START && /^
-
-\[.*\]
-
-/ {print NR; exit}" "$PRINTER_CFG")
+    # Find next section header literally starting with '['
+    MCU_END=$(awk -v start="$MCU_START" '
+        NR > start && substr($0,1,1) == "[" { print NR; exit }
+    ' "$PRINTER_CFG")
 
     # If no next section, use end of file
     [ -z "$MCU_END" ] && MCU_END=$(wc -l < "$PRINTER_CFG")
