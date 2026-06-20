@@ -12,7 +12,7 @@ else
     ACTUAL_HOME="$HOME"
 fi
 
-# Basic status helpers (same style as your Samba script)
+# Basic status helpers
 print_status() {
     printf "\033[34m🔧 %s\033[0m\n" "$1"
 }
@@ -29,7 +29,7 @@ print_error() {
     printf "\033[31m❌ %s\033[0m\n" "$1"
 }
 
-# Paths we care about
+# Paths
 KS_PATH="$ACTUAL_HOME/KlipperScreen"
 KS_VENV="$ACTUAL_HOME/.KlipperScreen-env"
 KS_REQ="$KS_PATH/scripts/KlipperScreen-requirements.txt"
@@ -41,52 +41,28 @@ PRINTER_CFG="$ACTUAL_HOME/printer_data/config/printer.cfg"
 print_status "Verifying KlipperScreen and Klipper configuration paths..."
 
 # Verify KlipperScreen repo
-if [ -d "$KS_PATH" ]; then
-    print_success "KlipperScreen folder found: $KS_PATH"
-else
-    print_error "KlipperScreen folder missing: $KS_PATH"
-    exit 1
-fi
+[ -d "$KS_PATH" ] && print_success "KlipperScreen folder found: $KS_PATH" \
+    || { print_error "KlipperScreen folder missing: $KS_PATH"; exit 1; }
 
 # Verify KlipperScreen venv
-if [ -d "$KS_VENV" ]; then
-    print_success "KlipperScreen virtualenv found: $KS_VENV"
-else
-    print_error "KlipperScreen virtualenv missing: $KS_VENV"
-    exit 1
-fi
+[ -d "$KS_VENV" ] && print_success "KlipperScreen virtualenv found: $KS_VENV" \
+    || { print_error "KlipperScreen virtualenv missing: $KS_VENV"; exit 1; }
 
 # Verify requirements file
-if [ -f "$KS_REQ" ]; then
-    print_success "KlipperScreen requirements file found: $KS_REQ"
-else
-    print_error "KlipperScreen requirements file missing: $KS_REQ"
-    exit 1
-fi
+[ -f "$KS_REQ" ] && print_success "KlipperScreen requirements file found: $KS_REQ" \
+    || { print_error "KlipperScreen requirements file missing: $KS_REQ"; exit 1; }
 
 # Verify system dependencies file
-if [ -f "$KS_SYS" ]; then
-    print_success "KlipperScreen system-dependencies.json found: $KS_SYS"
-else
-    print_error "KlipperScreen system-dependencies.json missing: $KS_SYS"
-    exit 1
-fi
+[ -f "$KS_SYS" ] && print_success "KlipperScreen system-dependencies.json found: $KS_SYS" \
+    || { print_error "KlipperScreen system-dependencies.json missing: $KS_SYS"; exit 1; }
 
 # Verify Moonraker config
-if [ -f "$MOONRAKER_CONF" ]; then
-    print_success "Moonraker config found: $MOONRAKER_CONF"
-else
-    print_error "Moonraker config missing: $MOONRAKER_CONF"
-    exit 1
-fi
+[ -f "$MOONRAKER_CONF" ] && print_success "Moonraker config found: $MOONRAKER_CONF" \
+    || { print_error "Moonraker config missing: $MOONRAKER_CONF"; exit 1; }
 
 # Verify printer.cfg
-if [ -f "$PRINTER_CFG" ]; then
-    print_success "printer.cfg found: $PRINTER_CFG"
-else
-    print_error "printer.cfg missing: $PRINTER_CFG"
-    exit 1
-fi
+[ -f "$PRINTER_CFG" ] && print_success "printer.cfg found: $PRINTER_CFG" \
+    || { print_error "printer.cfg missing: $PRINTER_CFG"; exit 1; }
 
 # Detect MCU serial
 print_status "Detecting MCU serial from /dev/serial/by-id..."
@@ -99,7 +75,7 @@ fi
 
 print_success "Detected MCU serial: $MCU_SERIAL"
 
-# Inject MCU serial into printer.cfg [mcu] section
+# --- FIXED SED LOGIC ---
 print_status "Updating [mcu] serial in printer.cfg..."
 
 if grep -q "^
@@ -107,26 +83,39 @@ if grep -q "^
 \[mcu\]
 
 " "$PRINTER_CFG"; then
-    # Replace serial line inside [mcu] block
+    # Replace serial inside [mcu] block until next section header
     sed -i "/^
 
 \[mcu\]
 
 /,/^
 
-\[/ s|^serial:.*|serial: $MCU_SERIAL|" "$PRINTER_CFG"
+\[[^]]\+\]
+
+/ { s|^serial:.*|serial: $MCU_SERIAL| }" "$PRINTER_CFG"
+
+    # If no serial line existed, append it inside the block
+    if ! grep -q "serial: $MCU_SERIAL" "$PRINTER_CFG"; then
+        print_warning "serial: line missing inside [mcu], appending..."
+        sed -i "/^
+
+\[mcu\]
+
+/a serial: $MCU_SERIAL" "$PRINTER_CFG"
+    fi
+
     print_success "Updated [mcu] serial in printer.cfg"
 else
-    print_warning "[mcu] section not found in printer.cfg, appending one at the end"
+    print_warning "[mcu] section not found, appending new section..."
     {
         echo ""
         echo "[mcu]"
         echo "serial: $MCU_SERIAL"
     } >> "$PRINTER_CFG"
-    print_success "Appended [mcu] section with serial to printer.cfg"
+    print_success "Appended new [mcu] section with serial"
 fi
 
-# Inject KlipperScreen update_manager block into Moonraker config
+# Inject KlipperScreen update_manager block
 print_status "Ensuring KlipperScreen update_manager block in moonraker.conf..."
 
 UPDATE_BLOCK="[update_manager KlipperScreen]
@@ -144,32 +133,19 @@ if grep -q "^
 \[update_manager KlipperScreen\]
 
 " "$MOONRAKER_CONF"; then
-    print_warning "KlipperScreen update_manager block already present in moonraker.conf"
+    print_warning "KlipperScreen update_manager block already present"
 else
-    print_status "Adding KlipperScreen update_manager block to moonraker.conf..."
+    print_status "Adding KlipperScreen update_manager block..."
     {
         echo ""
         echo "$UPDATE_BLOCK"
     } >> "$MOONRAKER_CONF"
-    print_success "KlipperScreen update_manager block added to moonraker.conf"
-fi
-
-print_status "Final verification of Moonraker configuration..."
-
-if command -v testparm >/dev/null 2>&1; then
-    if sudo testparm -s "$MOONRAKER_CONF" >/dev/null 2>&1; then
-        print_success "Moonraker configuration syntax validated successfully"
-    else
-        print_warning "Moonraker configuration validation reported issues (testparm)"
-    fi
-else
-    print_warning "testparm not available, skipping Samba-style validation for Moonraker"
+    print_success "Added KlipperScreen update_manager block"
 fi
 
 print_success "KlipperScreen + MCU serial configuration completed."
 echo
 echo "➡ After Phase 2 reboot, Moonraker will automatically load:"
-echo "   • Updated [mcu] serial in printer.cfg"
-echo "   • KlipperScreen update_manager block in moonraker.conf"
+echo "   • Updated [mcu] serial"
+echo "   • KlipperScreen update manager"
 echo
-echo "You can then open Mainsail → Machine to confirm gauges and update manager."
