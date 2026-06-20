@@ -148,4 +148,5 @@ origin: https://github.com/Guilouz/KlipperScreen-Flsun-Speeder-Pad.git
 virtualenv: $KS_VENV
 requirements: scripts/KlipperScreen-requirements.txt
 system_dependencies: scripts/system-dependencies.json
-managed_services: KlipperScreen
+managed_services: KlipperScreen"
+
