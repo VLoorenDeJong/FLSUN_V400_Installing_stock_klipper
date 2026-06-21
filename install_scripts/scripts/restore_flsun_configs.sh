@@ -37,7 +37,7 @@ detect_board_from_klipper() {
 
         case "$CHIP" in
             stm32h743) echo "SKR 3.0"; return ;;
-            stm32f407) echo "Robin Nano 3.0-3.1"; return ;;
+            stm32f407) echo "Robin Nano 3.0"; return ;;
             stm32f103) echo "Robin Nano 2.0"; return ;;
         esac
     fi
@@ -51,7 +51,8 @@ detect_board_from_serial() {
     SERIAL=$(grep -i "serial:" "$PRINTER_CFG" | awk '{print $2}' || true)
 
     [[ "$SERIAL" == *"stm32h743"* ]] && echo "SKR 3.0" && return
-    [[ "$SERIAL" == *"USB_Serial"* ]] && echo "MKS" && return
+    [[ "$SERIAL" == *"stm32f407"* ]] && echo "Robin Nano 3.0" && return
+    [[ "$SERIAL" == *"stm32f103"* ]] && echo "Robin Nano 2.0" && return
 
     echo ""
 }
@@ -92,11 +93,16 @@ while IFS= read -r folder; do
 
     # Split: "BigTreeTech SKR 3.0 - Stock"
     MANUF=$(echo "$base" | awk '{print $1}')
-    BOARD=$(echo "$base" | cut -d'-' -f1 | sed "s/$MANUF //")
+    BOARD=$(echo "$base" | cut -d'-' -f1 | sed "s/$MANUF //;s/ *$//")
     VARIANT=$(echo "$base" | cut -d'-' -f2- | sed 's/^ //')
 
     MANUFACTURERS["$MANUF"]=1
-    BOARDS_BY_MANUF["$MANUF"]+="$BOARD|"
+
+    # Deduplicate boards
+    if [[ ! "${BOARDS_BY_MANUF[$MANUF]}" =~ "$BOARD|" ]]; then
+        BOARDS_BY_MANUF["$MANUF"]+="$BOARD|"
+    fi
+
     VARIANTS_BY_BOARD["$BOARD"]+="$VARIANT|"
 
 done < <(find "$PRINTER_DIR" -mindepth 1 -maxdepth 1 -type d)
@@ -108,94 +114,105 @@ DETECTED_BOARD=$(detect_board_from_klipper)
 [ -z "$DETECTED_BOARD" ] && DETECTED_BOARD=$(detect_board_from_serial)
 
 # ------------------------------------------------------------
-#  BOARD SELECTION MENU
+#  MAIN MENU LOOP (REBUILD ON BACK)
 # ------------------------------------------------------------
-print_status "Building motherboard selection menu..."
+while true; do
+
+clear
+print_status "Building configuration selection menu..."
 
 echo "----------------------------------------"
 if [ -n "$DETECTED_BOARD" ]; then
-    echo "   Select motherboard  (detected: $DETECTED_BOARD)"
+    DETECTED_VARIANT=$(grep -i "$DETECTED_BOARD" -R "$PRINTER_DIR" | grep -oE " - .*" | head -n1 | sed 's/ - //')
+    echo "   Select configuration  (detected: $DETECTED_BOARD → $DETECTED_VARIANT)"
 else
-    echo "   Select motherboard"
+    echo "   Select configuration"
 fi
 echo "----------------------------------------"
 
-i=1
+INDEX=1
 declare -A INDEX_TO_BOARD
-declare -A INDEX_TO_MANUF
+declare -A INDEX_TO_VARIANT
 
 for MANUF in "${!MANUFACTURERS[@]}"; do
-    printf "\n\033[36m%s\033[0m\n" "$MANUF"
+    echo ""
+    printf "\033[36m%s\033[0m\n" "$MANUF"
 
     IFS='|' read -ra BOARDS <<< "${BOARDS_BY_MANUF[$MANUF]}"
     for BOARD in "${BOARDS[@]}"; do
         [ -z "$BOARD" ] && continue
 
-        if [[ "$BOARD" == "$DETECTED_BOARD" ]]; then
-            printf "   %d) %s   \033[32m<--- recommended\033[0m\n" "$i" "$BOARD"
-        else
-            printf "   %d) %s\n" "$i" "$BOARD"
-        fi
+        echo "    $BOARD"
 
-        INDEX_TO_BOARD[$i]="$BOARD"
-        INDEX_TO_MANUF[$i]="$MANUF"
-        ((i++))
+        IFS='|' read -ra VARS <<< "${VARIANTS_BY_BOARD[$BOARD]}"
+        for VAR in "${VARS[@]}"; do
+            [ -z "$VAR" ] && continue
+
+            if [[ "$BOARD" == "$DETECTED_BOARD" && "$VAR" == "$DETECTED_VARIANT" ]]; then
+                printf "        %d) %s     \033[32m<--- detected\033[0m\n" "$INDEX" "$VAR"
+            else
+                printf "        %d) %s\n" "$INDEX" "$VAR"
+            fi
+
+            INDEX_TO_BOARD[$INDEX]="$BOARD"
+            INDEX_TO_VARIANT[$INDEX]="$VAR"
+            ((INDEX++))
+        done
+
+        echo ""
     done
 done
 
 echo "----------------------------------------"
 read -p "Enter your choice: " CHOICE
 
+# Validate
+if ! [[ "$CHOICE" =~ ^[0-9]+$ ]]; then
+    print_error "Invalid selection."
+    sleep 1
+    continue
+fi
+
 SELECTED_BOARD="${INDEX_TO_BOARD[$CHOICE]}"
-SELECTED_MANUF="${INDEX_TO_MANUF[$CHOICE]}"
+SELECTED_VARIANT="${INDEX_TO_VARIANT[$CHOICE]}"
 
 if [ -z "$SELECTED_BOARD" ]; then
     print_error "Invalid selection."
-    exit 1
+    sleep 1
+    continue
 fi
 
-print_success "Selected board: $SELECTED_BOARD"
-
 # ------------------------------------------------------------
-#  VARIANT SELECTION
+#  CONFIRMATION
 # ------------------------------------------------------------
-print_status "Building variant selection menu..."
+echo ""
+echo "You selected: $SELECTED_BOARD → $SELECTED_VARIANT"
+read -p "Are you sure? (Y/n/b): " CONFIRM
 
-echo "----------------------------------------"
-echo "   Select configuration for $SELECTED_BOARD"
-echo "----------------------------------------"
+case "$CONFIRM" in
+    ""|"Y"|"y")
+        break
+        ;;
+    "n"|"N")
+        continue
+        ;;
+    "b"|"B")
+        continue
+        ;;
+    *)
+        continue
+        ;;
+esac
 
-IFS='|' read -ra VARS <<< "${VARIANTS_BY_BOARD[$SELECTED_BOARD]}"
-
-j=1
-declare -A INDEX_TO_VARIANT
-
-for VAR in "${VARS[@]}"; do
-    [ -z "$VAR" ] && continue
-    echo "   $j) $VAR"
-    INDEX_TO_VARIANT[$j]="$VAR"
-    ((j++))
 done
-
-echo "----------------------------------------"
-read -p "Enter your choice: " VCHOICE
-
-SELECTED_VARIANT="${INDEX_TO_VARIANT[$VCHOICE]}"
-
-if [ -z "$SELECTED_VARIANT" ]; then
-    print_error "Invalid selection."
-    exit 1
-fi
-
-print_success "Selected variant: $SELECTED_VARIANT"
 
 # ------------------------------------------------------------
 #  COPY CONFIG FILES
 # ------------------------------------------------------------
-SOURCE_FOLDER="$PRINTER_DIR/$SELECTED_MANUF $SELECTED_BOARD - $SELECTED_VARIANT"
+SOURCE_FOLDER="$PRINTER_DIR/$SELECTED_BOARD - $SELECTED_VARIANT"
 
 print_status "Copying configuration files..."
-cp -r "$SOURCE_FOLDER"/* "$CONFIG_ROOT/"
+cp -r "$SOURCE_FOLDER/"* "$CONFIG_ROOT/"
 print_success "Configuration files copied."
 
 # ------------------------------------------------------------
