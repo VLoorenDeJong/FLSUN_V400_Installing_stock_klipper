@@ -82,8 +82,8 @@ PHASE2_SCRIPTS=(
     "add_klipperscreen_guilouz.sh"        # install Guilouz KlipperScreen fork
     "add_usb_symlink.sh"                  # ln -s gcode_files/USB-Disk printer_data/gcodes/
     "fix_moonraker_shutdown.sh"           # policykit rules + [machine] shutdown_action
-    "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "restore_flsun_configs.sh"            # restore Guilouz configs for Klipper, Moonraker, Mainsail, and KlipperScreen
+    "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "add_flsun_theme.sh"                  # copy custom theme files to Mainsail
     "mark_phase2_complete.sh"             # Mark Phase 2 as complete
     "reboot.sh"                           # final reboot to bring up all services cleanly
