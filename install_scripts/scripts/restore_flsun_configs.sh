@@ -6,7 +6,6 @@ set -e
 # ------------------------------------------------------------
 print_status()   { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
 print_success()  { printf "\033[32m✅ %s\033[0m\n" "$1"; }
-print_warning()  { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
 print_error()    { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
 # ------------------------------------------------------------
@@ -28,36 +27,6 @@ rm -rf "$TMP_DIR"
 mkdir -p "$TMP_DIR"
 
 # ------------------------------------------------------------
-#  DETECT BOARD FROM KLIPPER (PRIMARY)
-# ------------------------------------------------------------
-detect_board_from_klipper() {
-    if [ -S /tmp/klippy_uds ]; then
-        MCU_INFO=$(echo -e '{"id": 123, "method": "info"}' | socat - /tmp/klippy_uds 2>/dev/null || true)
-        CHIP=$(echo "$MCU_INFO" | grep -oE "stm32[f,h][0-9]+" | head -n1 || true)
-
-        case "$CHIP" in
-            stm32h743) echo "SKR 3.0"; return ;;
-            stm32f407) echo "Robin Nano 3.0"; return ;;
-            stm32f103) echo "Robin Nano 2.0"; return ;;
-        esac
-    fi
-    echo ""
-}
-
-# ------------------------------------------------------------
-#  DETECT BOARD FROM SERIAL (FALLBACK)
-# ------------------------------------------------------------
-detect_board_from_serial() {
-    SERIAL=$(grep -i "serial:" "$PRINTER_CFG" | awk '{print $2}' || true)
-
-    [[ "$SERIAL" == *"stm32h743"* ]] && echo "SKR 3.0" && return
-    [[ "$SERIAL" == *"stm32f407"* ]] && echo "Robin Nano 3.0" && return
-    [[ "$SERIAL" == *"stm32f103"* ]] && echo "Robin Nano 2.0" && return
-
-    echo ""
-}
-
-# ------------------------------------------------------------
 #  DOWNLOAD + UNPACK PRIMARY SOURCE
 # ------------------------------------------------------------
 print_status "Downloading Guilouz configuration ZIP..."
@@ -74,8 +43,8 @@ print_success "Unpacked."
 PRINTER_DIR=$(find "$PRIMARY_UNZIP" -type d -name "FLSUN V400" | head -n1)
 
 if [ -z "$PRINTER_DIR" ]; then
-    print_error "FLSUN V400 folder not found in source."
-    exit 1
+  print_error "FLSUN V400 folder not found in source."
+  exit 1
 fi
 
 # ------------------------------------------------------------
@@ -84,34 +53,34 @@ fi
 declare -A MANUFACTURERS
 declare -A BOARDS_BY_MANUF
 declare -A VARIANTS_BY_BOARD
+declare -A FULL_FOLDER_NAME
 
 while IFS= read -r folder; do
-    base=$(basename "$folder")
+  base=$(basename "$folder")
 
-    # Skip PNGs or files
-    [ -d "$folder" ] || continue
+  # Skip PNGs or files
+  [ -d "$folder" ] || continue
 
-    # Split: "BigTreeTech SKR 3.0 - Stock"
-    MANUF=$(echo "$base" | awk '{print $1}')
-    BOARD=$(echo "$base" | cut -d'-' -f1 | sed "s/$MANUF //;s/ *$//")
-    VARIANT=$(echo "$base" | cut -d'-' -f2- | sed 's/^ //')
+  # Split on FIRST " - "
+  MANUF=$(echo "$base" | awk '{print $1}')
+  REST=$(echo "$base" | sed "s/^$MANUF //")
 
-    MANUFACTURERS["$MANUF"]=1
+  BOARD=$(echo "$REST" | cut -d'-' -f1 | sed 's/ *$//')
+  VARIANT=$(echo "$REST" | cut -d'-' -f2- | sed 's/^ //')
 
-    # Deduplicate boards
-    if [[ ! "${BOARDS_BY_MANUF[$MANUF]}" =~ "$BOARD|" ]]; then
-        BOARDS_BY_MANUF["$MANUF"]+="$BOARD|"
-    fi
+  MANUFACTURERS["$MANUF"]=1
 
-    VARIANTS_BY_BOARD["$BOARD"]+="$VARIANT|"
+  # Deduplicate boards
+  if [[ ! "${BOARDS_BY_MANUF[$MANUF]}" =~ "$BOARD|" ]]; then
+    BOARDS_BY_MANUF["$MANUF"]+="$BOARD|"
+  fi
+
+  VARIANTS_BY_BOARD["$BOARD"]+="$VARIANT|"
+
+  # Store full folder name for copying
+  FULL_FOLDER_NAME["$MANUF|$BOARD|$VARIANT"]="$base"
 
 done < <(find "$PRINTER_DIR" -mindepth 1 -maxdepth 1 -type d)
-
-# ------------------------------------------------------------
-#  DETECT BOARD
-# ------------------------------------------------------------
-DETECTED_BOARD=$(detect_board_from_klipper)
-[ -z "$DETECTED_BOARD" ] && DETECTED_BOARD=$(detect_board_from_serial)
 
 # ------------------------------------------------------------
 #  MAIN MENU LOOP (REBUILD ON BACK)
@@ -122,45 +91,38 @@ clear
 print_status "Building configuration selection menu..."
 
 echo "----------------------------------------"
-if [ -n "$DETECTED_BOARD" ]; then
-    DETECTED_VARIANT=$(grep -i "$DETECTED_BOARD" -R "$PRINTER_DIR" | grep -oE " - .*" | head -n1 | sed 's/ - //')
-    echo "   Select configuration  (detected: $DETECTED_BOARD → $DETECTED_VARIANT)"
-else
-    echo "   Select configuration"
-fi
+echo "  Select configuration"
 echo "----------------------------------------"
 
 INDEX=1
+declare -A INDEX_TO_MANUF
 declare -A INDEX_TO_BOARD
 declare -A INDEX_TO_VARIANT
 
 for MANUF in "${!MANUFACTURERS[@]}"; do
-    echo ""
-    printf "\033[36m%s\033[0m\n" "$MANUF"
+  echo ""
+  printf "\033[36m%s\033[0m\n" "$MANUF"
 
-    IFS='|' read -ra BOARDS <<< "${BOARDS_BY_MANUF[$MANUF]}"
-    for BOARD in "${BOARDS[@]}"; do
-        [ -z "$BOARD" ] && continue
+  IFS='|' read -ra BOARDS <<< "${BOARDS_BY_MANUF[$MANUF]}"
+  for BOARD in "${BOARDS[@]}"; do
+    [ -z "$BOARD" ] && continue
 
-        echo "    $BOARD"
+    echo "  $BOARD"
 
-        IFS='|' read -ra VARS <<< "${VARIANTS_BY_BOARD[$BOARD]}"
-        for VAR in "${VARS[@]}"; do
-            [ -z "$VAR" ] && continue
+    IFS='|' read -ra VARS <<< "${VARIANTS_BY_BOARD[$BOARD]}"
+    for VAR in "${VARS[@]}"; do
+      [ -z "$VAR" ] && continue
 
-            if [[ "$BOARD" == "$DETECTED_BOARD" && "$VAR" == "$DETECTED_VARIANT" ]]; then
-                printf "        %d) %s     \033[32m<--- detected\033[0m\n" "$INDEX" "$VAR"
-            else
-                printf "        %d) %s\n" "$INDEX" "$VAR"
-            fi
+      printf "    %d) %s\n" "$INDEX" "$VAR"
 
-            INDEX_TO_BOARD[$INDEX]="$BOARD"
-            INDEX_TO_VARIANT[$INDEX]="$VAR"
-            ((INDEX++))
-        done
-
-        echo ""
+      INDEX_TO_MANUF[$INDEX]="$MANUF"
+      INDEX_TO_BOARD[$INDEX]="$BOARD"
+      INDEX_TO_VARIANT[$INDEX]="$VAR"
+      ((INDEX++))
     done
+
+    echo ""
+  done
 done
 
 echo "----------------------------------------"
@@ -168,40 +130,41 @@ read -p "Enter your choice: " CHOICE
 
 # Validate
 if ! [[ "$CHOICE" =~ ^[0-9]+$ ]]; then
-    print_error "Invalid selection."
-    sleep 1
-    continue
+  print_error "Invalid selection."
+  sleep 1
+  continue
 fi
 
+SELECTED_MANUF="${INDEX_TO_MANUF[$CHOICE]}"
 SELECTED_BOARD="${INDEX_TO_BOARD[$CHOICE]}"
 SELECTED_VARIANT="${INDEX_TO_VARIANT[$CHOICE]}"
 
 if [ -z "$SELECTED_BOARD" ]; then
-    print_error "Invalid selection."
-    sleep 1
-    continue
+  print_error "Invalid selection."
+  sleep 1
+  continue
 fi
 
 # ------------------------------------------------------------
 #  CONFIRMATION
 # ------------------------------------------------------------
 echo ""
-echo "You selected: $SELECTED_BOARD → $SELECTED_VARIANT"
+echo "You selected: $SELECTED_MANUF $SELECTED_BOARD → $SELECTED_VARIANT"
 read -p "Are you sure? (Y/n/b): " CONFIRM
 
 case "$CONFIRM" in
-    ""|"Y"|"y")
-        break
-        ;;
-    "n"|"N")
-        continue
-        ;;
-    "b"|"B")
-        continue
-        ;;
-    *)
-        continue
-        ;;
+  ""|"Y"|"y")
+    break
+    ;;
+  "n"|"N")
+    continue
+    ;;
+  "b"|"B")
+    continue
+    ;;
+  *)
+    continue
+    ;;
 esac
 
 done
@@ -209,7 +172,8 @@ done
 # ------------------------------------------------------------
 #  COPY CONFIG FILES
 # ------------------------------------------------------------
-SOURCE_FOLDER="$PRINTER_DIR/$SELECTED_BOARD - $SELECTED_VARIANT"
+FOLDER_NAME="${FULL_FOLDER_NAME["$SELECTED_MANUF|$SELECTED_BOARD|$SELECTED_VARIANT"]}"
+SOURCE_FOLDER="$PRINTER_DIR/$FOLDER_NAME"
 
 print_status "Copying configuration files..."
 cp -r "$SOURCE_FOLDER/"* "$CONFIG_ROOT/"
