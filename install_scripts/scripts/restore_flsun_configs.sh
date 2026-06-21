@@ -193,5 +193,10 @@ sudo systemctl restart moonraker
 print_success "Services restarted."
 
 print_success "FLSUN configuration restore completed successfully!"
-echo ""
-read -p "Press Enter to continue..."
+
+# ------------------------------------------------------------
+#  SMART PAUSE (only when run directly)
+# ------------------------------------------------------------
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  read -p "Press Enter to continue..."
+fi
