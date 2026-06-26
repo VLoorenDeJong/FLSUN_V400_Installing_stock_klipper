@@ -23,6 +23,7 @@
 # 7. review smb settings
 # 8. Figure out why OctoApp does not find the printer on the network
 # 9. remove the change username and password script to only change the password of the current user
+# 10. Update main menu and documentation with the instructions for all options and phases
 
 
 # =============================================================================
