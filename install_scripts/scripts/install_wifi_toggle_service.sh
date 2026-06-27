@@ -10,12 +10,12 @@ REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 # ==========================
 # CONFIGURATION (shared)
 # ==========================
-SERVICE_NAME="wifi-toggle.service"
-TIMER_NAME="wifi-toggle.timer"
-SCRIPT_NAME="wifi-toggle.sh"
+SERVICE_NAME="wifi_toggle.service"
+TIMER_NAME="wifi_toggle.timer"
+SCRIPT_NAME="wifi_toggle.sh"
 
 # The toggle script lives inside the repo:
-TOGGLE_SCRIPT_PATH="$REPO_ROOT/backup_config/timed_wifi_toggle/scripts/$SCRIPT_NAME"
+TOGGLE_SCRIPT_PATH="$REPO_ROOT/backup_config/timed_wifi_toggle/$SCRIPT_NAME"
 
 # Where systemd stores services
 SYSTEMD_DIR="/etc/systemd/system"
@@ -48,8 +48,8 @@ print_warning() {
 if [ ! -f "$TOGGLE_SCRIPT_PATH" ]; then
     print_error "Cannot find $SCRIPT_NAME at:"
     echo "   $TOGGLE_SCRIPT_PATH"
-    print_warning "Ensure wifi-toggle.sh is inside:"
-    echo "   backup_config/timed_wifi_toggle/scripts/"
+    print_warning "Ensure wifi_toggle.sh is inside:"
+    echo "   backup_config/timed_wifi_toggle/"
     exit 1
 fi
 
@@ -125,4 +125,4 @@ print_success "WiFi toggle service + timer installed and running!"
 print_status "Checking timer status..."
 sudo systemctl status "${TIMER_NAME}" --no-pager || true
 
-print_success "Installation complete"
+print_success "Installation complete. The WiFi toggle service will run every ${TIMER_MINUTES} minutes."
