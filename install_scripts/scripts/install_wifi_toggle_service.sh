@@ -21,7 +21,7 @@ TOGGLE_SCRIPT_PATH="$REPO_ROOT/backup_config/timed_wifi_toggle/$SCRIPT_NAME"
 SYSTEMD_DIR="/etc/systemd/system"
 
 # Timer interval (in minutes)
-TIMER_MINUTES=5
+TIMER_MINUTES=1     #No fractions, systemd does not support them. 1 minute is the minimum interval.
 
 # ==========================
 # PRINT HELPERS
