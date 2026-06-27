@@ -21,7 +21,7 @@ TOGGLE_SCRIPT_PATH="$REPO_ROOT/backup_config/timed_wifi_toggle/$SCRIPT_NAME"
 SYSTEMD_DIR="/etc/systemd/system"
 
 # Timer interval (in minutes)
-TIMER_MINUTES=1     #No fractions, systemd does not support them. 1 minute is the minimum interval.
+TIMER_MINUTES=1     # No fractions, systemd does not support them. 1 minute is the minimum interval.
 
 # ==========================
 # PRINT HELPERS
@@ -49,7 +49,7 @@ if [ ! -f "$TOGGLE_SCRIPT_PATH" ]; then
     print_error "Cannot find $SCRIPT_NAME at:"
     echo "   $TOGGLE_SCRIPT_PATH"
     print_warning "Ensure wifi_toggle.sh is inside:"
-    echo "   backup_config/timed_wifi_toggle/"
+    echo "   backup_config/timed_wifi_toggle/scripts/"
     exit 1
 fi
 
@@ -62,6 +62,17 @@ sudo cp "$TOGGLE_SCRIPT_PATH" "/usr/local/bin/$SCRIPT_NAME"
 sudo chmod +x "/usr/local/bin/$SCRIPT_NAME"
 
 print_success "Installed: /usr/local/bin/$SCRIPT_NAME"
+
+# ==========================
+# CREATE LOG DIRECTORY
+# ==========================
+print_status "Creating log directory..."
+
+sudo mkdir -p /var/log/timed_wifi_toggle
+sudo chown pi:pi /var/log/timed_wifi_toggle
+sudo chmod 755 /var/log/timed_wifi_toggle
+
+print_success "Log directory ready: /var/log/timed_wifi_toggle"
 
 # ==========================
 # CREATE SERVICE FILE
@@ -96,6 +107,7 @@ sudo tee "${SYSTEMD_DIR}/${TIMER_NAME}" >/dev/null <<EOF
 Description=WiFi Toggle Timer
 
 [Timer]
+OnBootSec=60
 OnUnitActiveSec=$((TIMER_MINUTES * 60))
 Unit=${SERVICE_NAME}
 
