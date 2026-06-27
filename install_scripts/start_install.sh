@@ -1,29 +1,18 @@
 #!/bin/bash
 
 #Todo
-# 1. Fix pressing enter issue for continue
-            #You selected: MKS Robin Nano 2.0 → Stock
-            #Are you sure? (Y/n/b):
-            #🔧 Copying configuration files...
-            #✅ Configuration files copied.
-            #🔧 Fixing permissions...
-            #✅ Permissions fixed.
-            #🔧 Restarting Klipper services...
-            #✅ Services restarted.
-            #✅ FLSUN configuration restore completed successfully!
-            #Press Enter to continue...
-            #✅ Finished: restore_flsun_configs.sh
-# 2. See if webcam can be added automagicaly
-# 3. Remove optional extras and integrate in Phase 2
-# 4. Figure out favicon issue with Mainsail
-# 5. Review scripts 
-#       - restore flsun config
-#       - configure printer settings
-# 6. Build a script fr a service to disable and reanable the network adapter every 5 seconds
-# 7. review smb settings
-# 8. Figure out why OctoApp does not find the printer on the network
-# 9. remove the change username and password script to only change the password of the current user
-# 10. Update main menu and documentation with the instructions for all options and phases
+# 1.✔️  Fix pressing enter issue for continue           
+# 2.    See if webcam can be added automagicaly
+# 3.    Remove optional extras and integrate in Phase 2
+# 4.    Figure out favicon issue with Mainsail
+# 5.    Review scripts 
+#           - restore flsun config
+#           - configure printer settings
+# 6.    Build a script fr a service to disable and reanable the network adapter every 5 seconds
+# 7.    Review smb settings
+# 8.    Figure out why OctoApp does not find the printer on the network
+# 9.    Remove the change username and password script to only change the password of the current user
+# 10.   Update main menu and documentation with the instructions for all options and phases
 
 
 # =============================================================================
