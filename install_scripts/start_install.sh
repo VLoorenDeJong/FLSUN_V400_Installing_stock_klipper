@@ -9,7 +9,7 @@
 #           - restore flsun config
 #           - configure printer settings
 # 6.💡  Build a script for a service to disable and reanable the network adapter every 5 minutes
-# 7.    Review smb settings
+# 7.💡  Review smb settings
 # 8.💡  Figure out why OctoApp does not find the printer on the network
 # 9.    Remove the change username and password script to only change the password of the current user
 # 10.   Update main menu and documentation with the instructions for all options and phases
