@@ -2,14 +2,20 @@
 set -e
 
 # ==========================
+# DETECT REPO ROOT
+# ==========================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+# ==========================
 # CONFIGURATION (shared)
 # ==========================
 SERVICE_NAME="wifi-toggle.service"
 TIMER_NAME="wifi-toggle.timer"
 SCRIPT_NAME="wifi-toggle.sh"
 
-# Where your toggle script lives
-INSTALL_SCRIPT_PATH="/usr/local/bin/${SCRIPT_NAME}"
+# The toggle script lives inside the repo:
+TOGGLE_SCRIPT_PATH="$REPO_ROOT/backup_config/timed_wifi_toggle/scripts/$SCRIPT_NAME"
 
 # Where systemd stores services
 SYSTEMD_DIR="/etc/systemd/system"
@@ -39,9 +45,11 @@ print_warning() {
 # ==========================
 # VERIFY SCRIPT EXISTS
 # ==========================
-if [ ! -f "$SCRIPT_NAME" ]; then
-    print_error "Cannot find $SCRIPT_NAME in current directory"
-    print_warning "Place $SCRIPT_NAME next to this installer script"
+if [ ! -f "$TOGGLE_SCRIPT_PATH" ]; then
+    print_error "Cannot find $SCRIPT_NAME at:"
+    echo "   $TOGGLE_SCRIPT_PATH"
+    print_warning "Ensure wifi-toggle.sh is inside:"
+    echo "   backup_config/timed_wifi_toggle/scripts/"
     exit 1
 fi
 
@@ -50,10 +58,10 @@ fi
 # ==========================
 print_status "Installing WiFi toggle script to /usr/local/bin..."
 
-sudo cp "$SCRIPT_NAME" "$INSTALL_SCRIPT_PATH"
-sudo chmod +x "$INSTALL_SCRIPT_PATH"
+sudo cp "$TOGGLE_SCRIPT_PATH" "/usr/local/bin/$SCRIPT_NAME"
+sudo chmod +x "/usr/local/bin/$SCRIPT_NAME"
 
-print_success "Installed: $INSTALL_SCRIPT_PATH"
+print_success "Installed: /usr/local/bin/$SCRIPT_NAME"
 
 # ==========================
 # CREATE SERVICE FILE
@@ -67,7 +75,7 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=${INSTALL_SCRIPT_PATH}
+ExecStart=/usr/local/bin/${SCRIPT_NAME}
 User=pi
 Group=pi
 PermissionsStartOnly=true
@@ -117,4 +125,4 @@ print_success "WiFi toggle service + timer installed and running!"
 print_status "Checking timer status..."
 sudo systemctl status "${TIMER_NAME}" --no-pager || true
 
-print_success "Installation complete — no prompts, no pauses."
+print_success "Installation complete"
