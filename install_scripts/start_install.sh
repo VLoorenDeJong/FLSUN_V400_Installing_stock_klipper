@@ -1,16 +1,16 @@
 #!/bin/bash
 
 #Todo
-# 1.✔️  Fix pressing enter issue for continue           
+# 1.💡  Fix pressing enter issue for continue           
 # 2.    See if webcam can be added automagicaly
 # 3.    Remove optional extras and integrate in Phase 2
 # 4.    Figure out favicon issue with Mainsail
 # 5.    Review scripts 
 #           - restore flsun config
 #           - configure printer settings
-# 6.    Build a script fr a service to disable and reanable the network adapter every 5 seconds
+# 6.💡  Build a script for a service to disable and reanable the network adapter every 5 minutes
 # 7.    Review smb settings
-# 8.    Figure out why OctoApp does not find the printer on the network
+# 8.💡  Figure out why OctoApp does not find the printer on the network
 # 9.    Remove the change username and password script to only change the password of the current user
 # 10.   Update main menu and documentation with the instructions for all options and phases
 
