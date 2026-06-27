@@ -13,7 +13,7 @@ fi
 
 # Detect script directory and repo root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BACKUP_CONFIG="$REPO_ROOT/backup_config"
 
 # Repo backup_config folder
