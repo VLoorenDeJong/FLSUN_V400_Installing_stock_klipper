@@ -11,8 +11,17 @@ else
     ACTUAL_HOME="$HOME"
 fi
 
-REQUIRED_DIRS=("$ACTUAL_HOME/LinuxSetups/backup_config/smb")
-REQUIRED_FILES=("$ACTUAL_HOME/LinuxSetups/backup_config/smb/smb.conf")
+# Detect script directory and repo root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Repo backup_config folder
+BACKUP_CONFIG="$REPO_ROOT/backup_config"
+
+
+REQUIRED_DIRS=("$BACKUP_CONFIG/smb")
+REQUIRED_FILES=("$BACKUP_CONFIG/smb/smb.conf")
+
 for dir in "${REQUIRED_DIRS[@]}"; do
     if [ ! -d "$dir" ]; then
         printf "\033[33m⚠️ Required directory missing: $dir. Creating it.\033[0m\n"
@@ -605,9 +614,13 @@ fi
 
 ACTUAL_GROUP=$(id -gn "$ACTUAL_USER")
 
-BACKUP_CONFIG="$ACTUAL_HOME/LinuxSetups/backup_config"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+BACKUP_CONFIG="$REPO_ROOT/backup_config"
 SMB_CONFIG="$BACKUP_CONFIG/smb/smb.conf"
 SYSTEM_SMB_CONFIG="/etc/samba/smb.conf"
+
 
 if [ -d "$BACKUP_CONFIG" ] && [ -f "$SMB_CONFIG" ]; then
     print_status "Configuring Samba configuration file..."
