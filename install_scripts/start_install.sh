@@ -228,20 +228,33 @@ optional_checklist() {
 
 optional_phase2_extras() {
     declare -g -a PHASE2_OPTIONAL_SELECTED=()
-    local toggles=("off" "off")  # Webmin, Samba
+    local toggles=("off" "off" "off")  # Webmin, Samba, Webcam
 
     while true; do
         echo ""
         echo -e "\e[36m--- Phase 2 Optional Extras (toggle with number, Enter to confirm) ---\e[0m"
 
-        printf "  1) [%s] Webmin\n" "${toggles[0]}"
+        # Webmin
+        local mark_webmin="[ ]"
+        [[ "${toggles[0]}" == "on" ]] && mark_webmin="\e[92m[x]\e[0m"
+        printf "  1) %s Webmin\n" "$mark_webmin"
         echo   "         A simple web dashboard you open in your browser."
         echo   "         Lets you manage the Speeder Pad without using terminal commands."
         echo ""
 
-        printf "  2) [%s] Samba (SMB)\n" "${toggles[1]}"
+        # Samba
+        local mark_samba="[ ]"
+        [[ "${toggles[1]}" == "on" ]] && mark_samba="\e[92m[x]\e[0m"
+        printf "  2) %s Samba (SMB)\n" "$mark_samba"
         echo   "         Makes the Speeder Pad appear in Windows Explorer."
         echo   "         Lets you drag‑and‑drop G‑code files and configs directly."
+        echo ""
+
+        # Webcam
+        local mark_webcam="[ ]"
+        [[ "${toggles[2]}" == "on" ]] && mark_webcam="\e[92m[x]\e[0m"
+        printf "  3) %s Webcam\n" "$mark_webcam"
+        echo   "         Adds webcam configuration to Moonraker and printer.cfg."
         echo ""
 
         echo "  a) Select all"
@@ -251,18 +264,22 @@ optional_phase2_extras() {
         read -rp "Choice: " opt </dev/tty
 
         case "$opt" in
-            a) toggles=("on" "on") ;;
-            n) toggles=("off" "off") ;;
+            a) toggles=("on" "on" "on") ;;
+            n) toggles=("off" "off" "off") ;;
             "") break ;;
             1) [[ "${toggles[0]}" == "on" ]] && toggles[0]="off" || toggles[0]="on" ;;
             2) [[ "${toggles[1]}" == "on" ]] && toggles[1]="off" || toggles[1]="on" ;;
+            3) [[ "${toggles[2]}" == "on" ]] && toggles[2]="off" || toggles[2]="on" ;;
             *) echo -e "\e[33m⚠️  Invalid input\e[0m" ;;
         esac
     done
 
     [[ "${toggles[0]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webmin.sh")
     [[ "${toggles[1]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_smb.sh")
+    [[ "${toggles[2]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webcam_config.sh")
 }
+
+
 
 # =============================================================================
 # PHASE STATE TRACKING
@@ -338,6 +355,7 @@ while true; do
     echo ""
     phase_label 1 "Phase 1 — OS prep + distro upgrade      (ends with reboot)"
     phase_label 2 "Phase 2 — Flsun sp_installer1 + KIAUH prep (ends with reboot)"
+    echo -e "  \e[33m5)\e[0m  Run individual script"
     if [[ "$debugMode" -eq 1 ]]; then
         echo -e "  \e[33md)\e[0m  Debug mode          \e[32m[ON]\e[0m"
     else
