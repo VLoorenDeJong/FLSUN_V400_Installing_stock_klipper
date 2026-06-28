@@ -20,8 +20,6 @@
 # =============================================================================
 
 debugMode=0
-installNetworkManager=0
-overrideMode=0
 
 STATE_DIR="/var/lib/linuxsetups"
 
@@ -187,7 +185,7 @@ run_sequence() {
     fi
 }
 
-# Show a numbered checklist and return selected script names in SELECTED array
+ # Show a numbered checklist and return selected script names in SELECTED array
 optional_checklist() {
     declare -g -a SELECTED=()
     local toggles=()
@@ -227,17 +225,42 @@ optional_checklist() {
     done
 }
 
-# Build and run a sequence, injecting add_network_manager.sh before reboot.sh
-# when the installNetworkManager toggle is on.
-run_sequence_with_flags() {
-    local result=()
-    for s in "$@"; do
-        if [[ "$s" == "reboot.sh" && "$installNetworkManager" -eq 1 ]]; then
-            result+=("add_network_manager.sh")
-        fi
-        result+=("$s")
+optional_phase2_extras() {
+    declare -g -a PHASE2_OPTIONAL_SELECTED=()
+    local toggles=("off" "off")  # Webmin, Samba
+
+    while true; do
+        echo ""
+        echo -e "\e[36m--- Phase 2 Optional Extras (toggle with number, Enter to confirm) ---\e[0m"
+
+        printf "  1) [%s] Webmin\n" "${toggles[0]}"
+        echo   "         A simple web dashboard you open in your browser."
+        echo   "         Lets you manage the Speeder Pad without using terminal commands."
+        echo ""
+
+        printf "  2) [%s] Samba (SMB)\n" "${toggles[1]}"
+        echo   "         Makes the Speeder Pad appear in Windows Explorer."
+        echo   "         Lets you drag‑and‑drop G‑code files and configs directly."
+        echo ""
+
+        echo "  a) Select all"
+        echo "  n) Select none"
+        echo "  Enter) Confirm and continue"
+        echo ""
+        read -rp "Choice: " opt </dev/tty
+
+        case "$opt" in
+            a) toggles=("on" "on") ;;
+            n) toggles=("off" "off") ;;
+            "") break ;;
+            1) [[ "${toggles[0]}" == "on" ]] && toggles[0]="off" || toggles[0]="on" ;;
+            2) [[ "${toggles[1]}" == "on" ]] && toggles[1]="off" || toggles[1]="on" ;;
+            *) echo -e "\e[33m⚠️  Invalid input\e[0m" ;;
+        esac
     done
-    run_sequence "${result[@]}"
+
+    [[ "${toggles[0]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webmin.sh")
+    [[ "${toggles[1]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_smb.sh")
 }
 
 # =============================================================================
@@ -265,12 +288,7 @@ phase_label() {
 # Run a numbered phase; blocks re-run unless overrideMode=1; marks done on full success
 run_phase() {
     local phase_num="$1"; shift
-    if phase_done "$phase_num" && [[ "$overrideMode" -eq 0 ]]; then
-        echo -e "\e[32m✅ Phase $phase_num already completed.\e[0m"
-        echo -e "\e[33m   Enable override mode (o) to re-run.\e[0m"
-        return 0
-    fi
-    run_sequence_with_flags "$@"
+    run_sequence "$@"
     local phase_result=$?
     [[ $phase_result -eq 0 ]] && mark_phase_done "$phase_num"
     return $phase_result
@@ -319,24 +337,11 @@ while true; do
     echo ""
     phase_label 1 "Phase 1 — OS prep + distro upgrade      (ends with reboot)"
     phase_label 2 "Phase 2 — Flsun sp_installer1 + KIAUH prep (ends with reboot)"
-    echo -e "  \e[33m4)\e[0m  Optional extras only  \e[90m(Webmin, Samba)\e[0m"
-    echo -e "  \e[33m5)\e[0m  Run individual script"
-    echo -e "  \e[33m6)\e[0m  Full install  \e[90m(Phase 1 → 2 → 3, reboots in between)\e[0m"
     if [[ "$debugMode" -eq 1 ]]; then
         echo -e "  \e[33md)\e[0m  Debug mode          \e[32m[ON]\e[0m"
     else
         echo -e "  \e[33md)\e[0m  Debug mode          \e[90m[off]\e[0m"
-    fi
-    if [[ "$installNetworkManager" -eq 1 ]]; then
-        echo -e "  \e[33mn)\e[0m  NetworkManager      \e[32m[ON]\e[0m  \e[90m(replaces dhcpcd — may cause WiFi instability)\e[0m"
-    else
-        echo -e "  \e[33mn)\e[0m  NetworkManager      \e[90m[off]\e[0m"
-    fi
-    if [[ "$overrideMode" -eq 1 ]]; then
-        echo -e "  \e[33mo)\e[0m  Override completed  \e[32m[ON]\e[0m  \e[90m(allows re-running completed phases)\e[0m"
-    else
-        echo -e "  \e[33mo)\e[0m  Override completed  \e[90m[off]\e[0m"
-    fi
+    fi 
     echo -e "  \e[33mq)\e[0m  Quit"
     echo ""
     read -rp "Choice: " MAIN_CHOICE </dev/tty || { echo -e "\n\e[32m👋 Goodbye!\e[0m"; exit 0; }
@@ -347,13 +352,19 @@ while true; do
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
-            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
-            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
-            read -rp "Continue? [y/N]: " confirm </dev/tty
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                run_phase 2 "${PHASE2_SCRIPTS[@]}"
-            fi
-            ;;
+    echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+    echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
+
+    echo ""
+    echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
+    optional_phase2_extras
+
+    read -rp "Continue? [y/N]: " confirm </dev/tty
+    if [[ "$confirm" =~ ^[Yy]$ ]]; then
+        run_phase 2 "${PHASE2_SCRIPTS[@]}" "${PHASE2_OPTIONAL_SELECTED[@]}"
+    fi
+    ;;
+
         4)
             echo -e "\n\e[36m=== Optional Extras ===\e[0m"
             optional_checklist
@@ -366,12 +377,7 @@ while true; do
         5)
             menu_individual
             ;;
-        6)
-            echo -e "\n\e[36m=== Full Install: Phase 1 + 2 ===\e[0m"
-            echo -e "\e[33m⚠️  Phase 1 and Phase 2 each end with a reboot. After each reboot, re-run this script and choose the next phase.\e[0m"
-            read -rp "Start Phase 1 now? [y/N]: " confirm </dev/tty
-            [[ "$confirm" =~ ^[Yy]$ ]] && run_phase 1 "${PHASE1_SCRIPTS[@]}"
-            ;;
+       
         d|D)
             if [[ "$debugMode" -eq 1 ]]; then
                 debugMode=0
@@ -380,26 +386,7 @@ while true; do
                 debugMode=1
                 echo -e "\e[32m🔔 Debug mode enabled. Scripts will run with bash -x.\e[0m"
             fi
-            ;;
-        n|N)
-            if [[ "$installNetworkManager" -eq 1 ]]; then
-                installNetworkManager=0
-                echo -e "\e[33m🔕 NetworkManager disabled — dhcpcd will be used.\e[0m"
-            else
-                installNetworkManager=1
-                echo -e "\e[32m🔔 NetworkManager enabled — will install before reboot.\e[0m"
-                echo -e "\e[33m⚠️  This replaces dhcpcd and may cause WiFi instability.\e[0m"
-            fi
-            ;;
-        o|O)
-            if [[ "$overrideMode" -eq 1 ]]; then
-                overrideMode=0
-                echo -e "\e[33m🔒 Override disabled — completed phases are protected.\e[0m"
-            else
-                overrideMode=1
-                echo -e "\e[32m🔓 Override enabled — completed phases can be re-run.\e[0m"
-            fi
-            ;;
+            ;;      
         q|Q)
             echo -e "\e[32m👋 Goodbye!\e[0m"
             exit 0
