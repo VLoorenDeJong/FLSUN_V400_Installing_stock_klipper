@@ -107,8 +107,9 @@ PHASE2_SCRIPTS=(
 declare -A OPTIONAL_LABELS=(
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
+    ["add_webcam_config.sh"]="Webcam  (add webcam config to moonraker.conf and printer.cfg)"
 )
-OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh")
+OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh" "add_webcam_config.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -361,7 +362,26 @@ while true; do
 
     read -rp "Continue? [y/N]: " confirm </dev/tty
     if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        run_phase 2 "${PHASE2_SCRIPTS[@]}" "${PHASE2_OPTIONAL_SELECTED[@]}"
+        # Build a combined list: Phase 2 scripts + optional scripts BEFORE reboot.sh
+COMBINED_PHASE2=()
+
+# Add all Phase 2 scripts EXCEPT reboot.sh
+for s in "${PHASE2_SCRIPTS[@]}"; do
+    [[ "$s" == "reboot.sh" ]] && continue
+    COMBINED_PHASE2+=("$s")
+done
+
+# Add optional scripts here (BEFORE reboot)
+for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
+    COMBINED_PHASE2+=("$opt")
+done
+
+# Finally add reboot.sh
+COMBINED_PHASE2+=("reboot.sh")
+
+# Run Phase 2 with the corrected order
+run_phase 2 "${COMBINED_PHASE2[@]}"
+
     fi
     ;;
 
