@@ -232,7 +232,7 @@ optional_phase2_extras() {
 
     while true; do
         echo ""
-        echo -e "\e[36m--- Phase 2 Optional Extras (toggle with number, Enter to confirm) ---\e[0m"
+        echo -e "\e[36m--- Phase 2 Optional Extras (toggle with number, Enter/'c' to confirm, 'b' to go back) ---\e[0m"
 
         # Webmin
         local mark_webmin="[ ]"
@@ -259,14 +259,17 @@ optional_phase2_extras() {
 
         echo "  a) Select all"
         echo "  n) Select none"
-        echo "  Enter) Confirm and continue"
+        echo "  c) Continue"
+        echo "  b) Back"
+        echo "  Enter) Continue"
         echo ""
         read -rp "Choice: " opt </dev/tty
 
         case "$opt" in
             a) toggles=("on" "on" "on") ;;
             n) toggles=("off" "off" "off") ;;
-            "") break ;;
+            ""|c|C) break ;;   # Continue
+            b|B) return ;;     # Back (exit without selecting anything)
             1) [[ "${toggles[0]}" == "on" ]] && toggles[0]="off" || toggles[0]="on" ;;
             2) [[ "${toggles[1]}" == "on" ]] && toggles[1]="off" || toggles[1]="on" ;;
             3) [[ "${toggles[2]}" == "on" ]] && toggles[2]="off" || toggles[2]="on" ;;
@@ -278,6 +281,7 @@ optional_phase2_extras() {
     [[ "${toggles[1]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_smb.sh")
     [[ "${toggles[2]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webcam_config.sh")
 }
+
 
 
 
