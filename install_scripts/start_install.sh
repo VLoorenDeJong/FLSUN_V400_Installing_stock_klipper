@@ -66,7 +66,7 @@ bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
     "set_scripts_executable.sh"
-    "change_username_password.sh"   # Interactive — rename current user and/or set new password
+    "update_password.sh"        # Set new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
     "cleanup_repositories.sh"
     "add_ssh.sh"
