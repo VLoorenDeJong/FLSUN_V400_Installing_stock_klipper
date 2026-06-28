@@ -226,61 +226,41 @@ optional_checklist() {
     done
 }
 
-optional_phase2_extras() {
-    declare -g -a PHASE2_OPTIONAL_SELECTED=()
-    local toggles=("off" "off" "off")  # Webmin, Samba, Webcam
+echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
 
-    while true; do
-        echo ""
-        echo -e "\e[36m--- Phase 2 Optional Extras (toggle with number, Enter/'c' to confirm, 'b' to go back) ---\e[0m"
+echo ""
+echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
+optional_phase2_extras
 
-        # Webmin
-        local mark_webmin="[ ]"
-        [[ "${toggles[0]}" == "on" ]] && mark_webmin="\e[92m[x]\e[0m"
-        printf "  1) %b Webmin\n" "$mark_webmin"
-        echo   "         A simple web dashboard you open in your browser."
-        echo   "         Lets you manage the Speeder Pad without using terminal commands."
-        echo ""
+# If user pressed 'b', return to main menu
+if [[ $? -eq 1 ]]; then
+    echo -e "\e[33m↩️  Returning to main menu...\e[0m"
+    continue
+fi
 
-        # Samba
-        local mark_samba="[ ]"
-        [[ "${toggles[1]}" == "on" ]] && mark_samba="\e[92m[x]\e[0m"
-        printf "  2) %b Samba (SMB)\n" "$mark_samba"
-        echo   "         Makes the Speeder Pad appear in Windows Explorer."
-        echo   "         Lets you drag‑and‑drop G‑code files and configs directly."
-        echo ""
+read -rp "Continue? [y/N]: " confirm </dev/tty
+if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    # Build a combined list: Phase 2 scripts + optional scripts BEFORE reboot.sh
+    COMBINED_PHASE2=()
 
-        # Webcam
-        local mark_webcam="[ ]"
-        [[ "${toggles[2]}" == "on" ]] && mark_webcam="\e[92m[x]\e[0m"
-        printf "  3) %b Webcam\n" "$mark_webcam"
-        echo   "         Adds webcam configuration to Moonraker and printer.cfg."
-        echo ""
-
-        echo "  a) Select all"
-        echo "  n) Select none"
-        echo "  c) Continue"
-        echo "  b) Back"
-        echo "  Enter) Continue"
-        echo ""
-        read -rp "Choice: " opt </dev/tty
-
-        case "$opt" in
-            a) toggles=("on" "on" "on") ;;
-            n) toggles=("off" "off" "off") ;;
-            ""|c|C) break ;;   # Continue
-            b|B) return 1 ;;   # Back → signal to caller
-            1) [[ "${toggles[0]}" == "on" ]] && toggles[0]="off" || toggles[0]="on" ;;
-            2) [[ "${toggles[1]}" == "on" ]] && toggles[1]="off" || toggles[1]="on" ;;
-            3) [[ "${toggles[2]}" == "on" ]] && toggles[2]="off" || toggles[2]="on" ;;
-            *) echo -e "\e[33m⚠️  Invalid input\e[0m" ;;
-        esac
+    # Add all Phase 2 scripts EXCEPT reboot.sh
+    for s in "${PHASE2_SCRIPTS[@]}"; do
+        [[ "$s" == "reboot.sh" ]] && continue
+        COMBINED_PHASE2+=("$s")
     done
 
-    [[ "${toggles[0]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webmin.sh")
-    [[ "${toggles[1]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_smb.sh")
-    [[ "${toggles[2]}" == "on" ]] && PHASE2_OPTIONAL_SELECTED+=("add_webcam_config.sh")
-}
+    # Add optional scripts here (BEFORE reboot)
+    for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
+        COMBINED_PHASE2+=("$opt")
+    done
+
+    # Finally add reboot.sh
+    COMBINED_PHASE2+=("reboot.sh")
+
+    # Run Phase 2 with the corrected order
+    run_phase 2 "${COMBINED_PHASE2[@]}"
+fi
 
 
 
@@ -374,38 +354,43 @@ while true; do
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
+
         2)
-    echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
-    echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
+            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
 
-    echo ""
-    echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
-    optional_phase2_extras
+            echo ""
+            echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
+            optional_phase2_extras
 
-    read -rp "Continue? [y/N]: " confirm </dev/tty
-    if [[ "$confirm" =~ ^[Yy]$ ]]; then
-        # Build a combined list: Phase 2 scripts + optional scripts BEFORE reboot.sh
-COMBINED_PHASE2=()
+            # If user pressed 'b', return to main menu
+            if [[ $? -eq 1 ]]; then
+                echo -e "\e[33m↩️  Returning to main menu...\e[0m"
+                continue
+            fi
 
-# Add all Phase 2 scripts EXCEPT reboot.sh
-for s in "${PHASE2_SCRIPTS[@]}"; do
-    [[ "$s" == "reboot.sh" ]] && continue
-    COMBINED_PHASE2+=("$s")
-done
+            read -rp "Continue? [y/N]: " confirm </dev/tty
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
 
-# Add optional scripts here (BEFORE reboot)
-for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
-    COMBINED_PHASE2+=("$opt")
-done
+                COMBINED_PHASE2=()
 
-# Finally add reboot.sh
-COMBINED_PHASE2+=("reboot.sh")
+                # Add all Phase 2 scripts EXCEPT reboot.sh
+                for s in "${PHASE2_SCRIPTS[@]}"; do
+                    [[ "$s" == "reboot.sh" ]] && continue
+                    COMBINED_PHASE2+=("$s")
+                done
 
-# Run Phase 2 with the corrected order
-run_phase 2 "${COMBINED_PHASE2[@]}"
+                # Add optional scripts BEFORE reboot
+                for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
+                    COMBINED_PHASE2+=("$opt")
+                done
 
-    fi
-    ;;
+                # Add reboot.sh last
+                COMBINED_PHASE2+=("reboot.sh")
+
+                run_phase 2 "${COMBINED_PHASE2[@]}"
+            fi
+            ;;
 
         4)
             echo -e "\n\e[36m=== Optional Extras ===\e[0m"
@@ -416,10 +401,11 @@ run_phase 2 "${COMBINED_PHASE2[@]}"
                 echo -e "\e[33m⚠️  Nothing selected.\e[0m"
             fi
             ;;
+
         5)
             menu_individual
             ;;
-       
+
         d|D)
             if [[ "$debugMode" -eq 1 ]]; then
                 debugMode=0
@@ -428,11 +414,13 @@ run_phase 2 "${COMBINED_PHASE2[@]}"
                 debugMode=1
                 echo -e "\e[32m🔔 Debug mode enabled. Scripts will run with bash -x.\e[0m"
             fi
-            ;;      
+            ;;
+
         q|Q)
             echo -e "\e[32m👋 Goodbye!\e[0m"
             exit 0
             ;;
+
         *)
             echo -e "\e[33m⚠️  Invalid choice, try again.\e[0m"
             ;;
