@@ -237,7 +237,7 @@ optional_phase2_extras() {
         # Webmin
         local mark_webmin="[ ]"
         [[ "${toggles[0]}" == "on" ]] && mark_webmin="\e[92m[x]\e[0m"
-        printf "  1) %s Webmin\n" "$mark_webmin"
+        printf "  1) %b Webmin\n" "$mark_webmin"
         echo   "         A simple web dashboard you open in your browser."
         echo   "         Lets you manage the Speeder Pad without using terminal commands."
         echo ""
@@ -245,7 +245,7 @@ optional_phase2_extras() {
         # Samba
         local mark_samba="[ ]"
         [[ "${toggles[1]}" == "on" ]] && mark_samba="\e[92m[x]\e[0m"
-        printf "  2) %s Samba (SMB)\n" "$mark_samba"
+        printf "  2) %b Samba (SMB)\n" "$mark_samba"
         echo   "         Makes the Speeder Pad appear in Windows Explorer."
         echo   "         Lets you drag‑and‑drop G‑code files and configs directly."
         echo ""
@@ -253,7 +253,7 @@ optional_phase2_extras() {
         # Webcam
         local mark_webcam="[ ]"
         [[ "${toggles[2]}" == "on" ]] && mark_webcam="\e[92m[x]\e[0m"
-        printf "  3) %s Webcam\n" "$mark_webcam"
+        printf "  3) %b Webcam\n" "$mark_webcam"
         echo   "         Adds webcam configuration to Moonraker and printer.cfg."
         echo ""
 
@@ -269,7 +269,7 @@ optional_phase2_extras() {
             a) toggles=("on" "on" "on") ;;
             n) toggles=("off" "off" "off") ;;
             ""|c|C) break ;;   # Continue
-            b|B) return ;;     # Back (exit without selecting anything)
+            b|B) return 1 ;;   # Back → signal to caller
             1) [[ "${toggles[0]}" == "on" ]] && toggles[0]="off" || toggles[0]="on" ;;
             2) [[ "${toggles[1]}" == "on" ]] && toggles[1]="off" || toggles[1]="on" ;;
             3) [[ "${toggles[2]}" == "on" ]] && toggles[2]="off" || toggles[2]="on" ;;
