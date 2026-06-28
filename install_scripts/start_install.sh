@@ -2,7 +2,7 @@
 
 #Todo
 # 1.💡  Fix pressing enter issue for continue           
-# 2.    See if webcam can be added automagicaly
+# 2.✖️  See if webcam can be added automagicaly
 # 3.    Remove optional extras and integrate in Phase 2
 # 4.    Figure out favicon issue with Mainsail
 # 5.    Review scripts 
@@ -107,9 +107,8 @@ PHASE2_SCRIPTS=(
 declare -A OPTIONAL_LABELS=(
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
-    ["add_webcam_config.sh"]="Webcam  (add webcam config to moonraker.conf and printer.cfg)"
 )
-OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh" "add_webcam_config.sh")
+OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
