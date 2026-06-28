@@ -239,29 +239,21 @@ if [[ $? -eq 1 ]]; then
     continue
 fi
 
-read -rp "Continue? [y/N]: " confirm </dev/tty
-if [[ "$confirm" =~ ^[Yy]$ ]]; then
-    # Build a combined list: Phase 2 scripts + optional scripts BEFORE reboot.sh
-    COMBINED_PHASE2=()
 
-    # Add all Phase 2 scripts EXCEPT reboot.sh
-    for s in "${PHASE2_SCRIPTS[@]}"; do
-        [[ "$s" == "reboot.sh" ]] && continue
-        COMBINED_PHASE2+=("$s")
-    done
+# Wrapper for Phase 2 optional extras
+optional_phase2_extras() {
+    # Use the existing checklist UI
+    optional_checklist
 
-    # Add optional scripts here (BEFORE reboot)
-    for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
-        COMBINED_PHASE2+=("$opt")
-    done
+    # If user pressed 'b', optional_checklist will not detect it
+    # so we manually check for empty input + 'b'
+    if [[ "$opt" == "b" ]]; then
+        return 1
+    fi
 
-    # Finally add reboot.sh
-    COMBINED_PHASE2+=("reboot.sh")
-
-    # Run Phase 2 with the corrected order
-    run_phase 2 "${COMBINED_PHASE2[@]}"
-fi
-
+    # Copy SELECTED → PHASE2_OPTIONAL_SELECTED
+    PHASE2_OPTIONAL_SELECTED=("${SELECTED[@]}")
+}
 
 
 
@@ -354,45 +346,24 @@ while true; do
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
+2)
+    echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+    echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
 
-        2)
-            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
-            echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
+    echo ""
+    echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
+    optional_phase2_extras
 
-            echo ""
-            echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
-            optional_phase2_extras
+    if [[ $? -eq 1 ]]; then
+        echo -e "\e[33m↩️  Returning to main menu...\e[0m"
+        continue
+    fi
 
-            # If user pressed 'b', return to main menu
-            if [[ $? -eq 1 ]]; then
-                echo -e "\e[33m↩️  Returning to main menu...\e[0m"
-                continue
-            fi
+    
 
-            read -rp "Continue? [y/N]: " confirm </dev/tty
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
 
-                COMBINED_PHASE2=()
-
-                # Add all Phase 2 scripts EXCEPT reboot.sh
-                for s in "${PHASE2_SCRIPTS[@]}"; do
-                    [[ "$s" == "reboot.sh" ]] && continue
-                    COMBINED_PHASE2+=("$s")
-                done
-
-                # Add optional scripts BEFORE reboot
-                for opt in "${PHASE2_OPTIONAL_SELECTED[@]}"; do
-                    COMBINED_PHASE2+=("$opt")
-                done
-
-                # Add reboot.sh last
-                COMBINED_PHASE2+=("reboot.sh")
-
-                run_phase 2 "${COMBINED_PHASE2[@]}"
-            fi
-            ;;
-
-        4)
+           
+    3)
             echo -e "\n\e[36m=== Optional Extras ===\e[0m"
             optional_checklist
             if [[ ${#SELECTED[@]} -gt 0 ]]; then
@@ -402,7 +373,7 @@ while true; do
             fi
             ;;
 
-        5)
+        4)
             menu_individual
             ;;
 
