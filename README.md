@@ -78,4 +78,4 @@ Samba (SMB) is included but disabled until you set the gcode folder path in `bac
 
 ![Sudoers config](image-5.png)
 
-![Resolved.conf](image-4.png)
+![Resolved.conf](image-8.png)
