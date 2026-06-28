@@ -74,7 +74,7 @@ sudo apt update && sudo apt install git && git --version
 ## Note
 Samba (SMB) is included but disabled until you set the gcode folder path in `backup_config/smb/smb.conf`.
 
-![LTS/Norman](image-6.png)
+![LTS/Normal](image-7.png)
 
 ![Sudoers config](image-5.png)
 
