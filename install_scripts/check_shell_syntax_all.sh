@@ -45,21 +45,6 @@ err_count=0
 total_count="${#scripts[@]}"
 failed_details=()
 
-render_progress() {
-  local current="$1"
-  local total="$2"
-  local width=30
-  local percent=$(( current * 100 / total ))
-  local filled=$(( current * width / total ))
-  local empty=$(( width - filled ))
-  local bar=""
-
-  for ((i=0; i<filled; i++)); do bar+="#"; done
-  for ((i=0; i<empty; i++)); do bar+="-"; done
-
-  printf '\r[%s] %3d%%  %d/%d  OK=%d ERR=%d' "$bar" "$percent" "$current" "$total" "$ok_count" "$err_count"
-}
-
 for idx in "${!scripts[@]}"; do
   f="${scripts[$idx]}"
   first_line="$(head -n 1 "$f" || true)"
@@ -71,17 +56,16 @@ for idx in "${!scripts[@]}"; do
 
   if "$checker" -n "$f"; then
     ((ok_count++))
+    printf '\033[92mOK\033[0m      [%s] %s\n' "$checker" "$f"
   else
     ((err_count++))
     failed_details+=("[$checker] $f")
+    printf '\033[31mFAILED\033[0m  [%s] %s\n' "$checker" "$f"
   fi
-
-  render_progress "$((idx + 1))" "$total_count"
 done
 
-echo
+echo ""
 if [ "$err_count" -gt 0 ]; then
-  echo ""
   echo "Failed files:"
   for entry in "${failed_details[@]}"; do
     echo "  $entry"
