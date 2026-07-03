@@ -42,6 +42,19 @@ print_warning() {
     printf "\033[33m⚠️ %s\033[0m\n" "$1"
 }
 
+# Detect actual user and home (sudo-safe)
+if [ -n "${SUDO_USER:-}" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER=$(whoami)
+fi
+
+ACTUAL_HOME=$(getent passwd "$ACTUAL_USER" | cut -d: -f6)
+if [ -z "$ACTUAL_HOME" ]; then
+    print_error "Could not determine home directory for user: $ACTUAL_USER"
+    exit 1
+fi
+
 # ==========================
 # VERIFY SCRIPT EXISTS
 # ==========================
@@ -49,7 +62,7 @@ if [ ! -f "$TOGGLE_SCRIPT_PATH" ]; then
     print_error "Cannot find $SCRIPT_NAME at:"
     echo "   $TOGGLE_SCRIPT_PATH"
     print_warning "Ensure wifi_toggle.sh is inside:"
-    echo "   backup_config/timed_wifi_toggle/scripts/"
+    echo "   backup_config/timed_wifi_toggle/"
     exit 1
 fi
 
@@ -69,7 +82,7 @@ print_success "Installed: /usr/local/bin/$SCRIPT_NAME"
 print_status "Creating log directory..."
 
 sudo mkdir -p /var/log/timed_wifi_toggle
-sudo chown pi:pi /var/log/timed_wifi_toggle
+sudo chown "$ACTUAL_USER:$ACTUAL_USER" /var/log/timed_wifi_toggle
 sudo chmod 755 /var/log/timed_wifi_toggle
 
 print_success "Log directory ready: /var/log/timed_wifi_toggle"
@@ -87,8 +100,8 @@ After=network.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/${SCRIPT_NAME}
-User=pi
-Group=pi
+User=${ACTUAL_USER}
+Group=${ACTUAL_USER}
 PermissionsStartOnly=true
 
 [Install]

@@ -11,7 +11,14 @@ print_error()    { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 # ------------------------------------------------------------
 #  PATHS
 # ------------------------------------------------------------
-ACTUAL_HOME="/home/pi"
+if [ -n "$SUDO_USER" ]; then
+  ACTUAL_USER="$SUDO_USER"
+  ACTUAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+else
+  ACTUAL_USER=$(whoami)
+  ACTUAL_HOME="$HOME"
+fi
+
 PRINTER_CFG="$ACTUAL_HOME/printer_data/config/printer.cfg"
 CONFIG_ROOT="$ACTUAL_HOME/printer_data/config"
 TMP_DIR="/tmp/flsun_config_restore"
@@ -52,7 +59,7 @@ fi
 # ------------------------------------------------------------
 declare -A MANUFACTURERS
 declare -A BOARDS_BY_MANUF
-declare -A VARIANTS_BY_BOARD
+declare -A VARIANTS_BY_MANUF_BOARD
 declare -A FULL_FOLDER_NAME
 
 while IFS= read -r folder; do
@@ -75,7 +82,7 @@ while IFS= read -r folder; do
     BOARDS_BY_MANUF["$MANUF"]+="$BOARD|"
   fi
 
-  VARIANTS_BY_BOARD["$BOARD"]+="$VARIANT|"
+  VARIANTS_BY_MANUF_BOARD["$MANUF|$BOARD"]+="$VARIANT|"
 
   # Store full folder name for copying
   FULL_FOLDER_NAME["$MANUF|$BOARD|$VARIANT"]="$base"
@@ -109,7 +116,7 @@ for MANUF in "${!MANUFACTURERS[@]}"; do
 
     echo "  $BOARD"
 
-    IFS='|' read -ra VARS <<< "${VARIANTS_BY_BOARD[$BOARD]}"
+    IFS='|' read -ra VARS <<< "${VARIANTS_BY_MANUF_BOARD[$MANUF|$BOARD]}"
     for VAR in "${VARS[@]}"; do
       [ -z "$VAR" ] && continue
 
@@ -183,7 +190,7 @@ print_success "Configuration files copied."
 #  FIX PERMISSIONS + RESTART
 # ------------------------------------------------------------
 print_status "Fixing permissions..."
-sudo chown -R pi:pi "$CONFIG_ROOT"
+sudo chown -R "$ACTUAL_USER:$ACTUAL_USER" "$CONFIG_ROOT"
 sudo chmod -R 775 "$CONFIG_ROOT"
 print_success "Permissions fixed."
 

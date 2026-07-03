@@ -1,4 +1,12 @@
 #!/bin/bash
+set -e
+
+# Detect actual user and home (sudo-safe)
+if [ -n "${SUDO_USER:-}" ]; then
+    ACTUAL_USER="$SUDO_USER"
+else
+    ACTUAL_USER="$(whoami)"
+fi
 
 # ==========================
 # CONFIGURATION
@@ -9,7 +17,7 @@ BASE_NAME="wifi-toggle"
 
 # Timestamp formats (modifiable)
 TS_FORMAT="%Y_%m_%d_%H-%M"           # Example: 2026_06_27_16-15
-DAILY_FORMAT="%Y_%m_%d-%m-%Y"        # Example: 2026_06_27-06-2026
+DAILY_FORMAT="%Y_%m_%d"              # Example: 2026_06_27
 
 # ==========================
 # LOG DIRECTORY (system-wide)
@@ -18,8 +26,8 @@ LOG_DIR="/var/log/timed_wifi_toggle"
 
 # Auto-create log folder if missing
 if [ ! -d "$LOG_DIR" ]; then
-    sudo mkdir -p "$LOG_DIR"
-    sudo chown pi:pi "$LOG_DIR"
+    mkdir -p "$LOG_DIR"
+    chown "$ACTUAL_USER:$ACTUAL_USER" "$LOG_DIR"
 fi
 
 # ==========================

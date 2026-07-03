@@ -1,18 +1,12 @@
 #!/bin/bash
 
 #Todo
-# 1.💡  Fix pressing enter issue for continue           
-# 2.✖️  See if webcam can be added automagicaly
-# 3.    Remove optional extras and integrate in Phase 2
-# 4.    Figure out favicon issue with Mainsail
-# 5.    Review scripts 
-#           - restore flsun config
-#           - configure printer settings
-# 6.💡  Build a script for a service to disable and reanable the network adapter every 5 minutes
-# 7.💡  Review smb settings
-# 8.💡  Figure out why OctoApp does not find the printer on the network
-# 9.    Remove the change username and password script to only change the password of the current user
-# 10.   Update main menu and documentation with the instructions for all options and phases
+# 01.💡 Fix pressing enter issue for continue   
+# 03.   Figure out favicon issue with Mainsail
+# 04.💡 Build a script for a service to disable and reanable the network adapter every 5 minutes
+# 05.💡 Review smb settings
+# 06.💡  Remove the change username and password script to only change the password of the current user
+# 07.💡  Update main menu and documentation with the instructions for all options and phases
 
 
 # =============================================================================
@@ -99,8 +93,6 @@ PHASE2_SCRIPTS=(
     "restore_flsun_configs.sh"            # restore Guilouz configs for Klipper, Moonraker, Mainsail, and KlipperScreen
     "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "add_flsun_theme.sh"                  # copy custom theme files to Mainsail
-    "mark_phase2_complete.sh"             # Mark Phase 2 as complete
-    "reboot.sh"                           # final reboot to bring up all services cleanly
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
@@ -168,46 +160,53 @@ run_script() {
 
 run_sequence() {
     local scripts=("$@")
-    local all_ok=true
 
     for script_entry in "${scripts[@]}"; do
         # Split entry into script name + optional args
         read -ra parts <<< "$script_entry"
         local script="${parts[0]}"
         local extra_args=("${parts[@]:1}")
-        run_script "$script" "${extra_args[@]}" || all_ok=false
+        if ! run_script "$script" "${extra_args[@]}"; then
+            echo -e "\e[33m⚠️  Sequence stopped due to failure in: $script\e[0m"
+            return 1
+        fi
     done
 
-    if $all_ok; then
-        echo -e "\e[32m🎉 All steps completed successfully!\e[0m"
-    else
-        echo -e "\e[33m⚠️  Completed with failures. Check output above.\e[0m"
-    fi
+    echo -e "\e[32m🎉 All steps completed successfully!\e[0m"
+    return 0
 }
 
  # Show a numbered checklist and return selected script names in SELECTED array
 optional_checklist() {
     declare -g -a SELECTED=()
     local toggles=()
-    for s in "${OPTIONAL_ORDER[@]}"; do toggles+=("off"); done
+    for s in "${OPTIONAL_ORDER[@]}"; do toggles+=("on"); done
 
     while true; do
         echo ""
-        echo -e "\e[36m--- Optional Extras (toggle with number, Enter to confirm) ---\e[0m"
+        echo -e "\e[36m--- Optional Extras ---\e[0m"
+        echo "Optional extras are additional tools. The main install works without them."
+        echo "These extras run before the final reboot."
+        echo ""
         for i in "${!OPTIONAL_ORDER[@]}"; do
             local s="${OPTIONAL_ORDER[$i]}"
-            local mark="[ ]"
-            [[ "${toggles[$i]}" == "on" ]] && mark="[x]"
-            printf "  %d) %s  %s\n" "$((i+1))" "$mark" "${OPTIONAL_LABELS[$s]}"
+            local mark="\e[37m[ ]\e[0m"
+            [[ "${toggles[$i]}" == "on" ]] && mark="\e[92m[x]\e[0m"
+            printf "  %d) %b %s\n" "$((i+1))" "$mark" "${OPTIONAL_LABELS[$s]}"
         done
-        echo "  a) Select all"
-        echo "  n) Select none"
-        echo "  Enter) Confirm and continue"
+        echo ""
+        echo "Commands:"
+        echo "  1 or 2 = Toggle selection"
+        echo "  a      = Select all"
+        echo "  n      = Deselect all"
+        echo "  b      = Back to main menu"
+        echo "  Enter  = Continue"
         echo ""
         read -rp "Choice: " opt </dev/tty
         case "$opt" in
             a) for i in "${!toggles[@]}"; do toggles[i]="on"; done ;;
             n) for i in "${!toggles[@]}"; do toggles[i]="off"; done ;;
+            b|B) return 1 ;;
             "") break ;;
             [0-9]*)
                 local idx=$((opt-1))
@@ -223,35 +222,19 @@ optional_checklist() {
     for i in "${!OPTIONAL_ORDER[@]}"; do
         [[ "${toggles[$i]}" == "on" ]] && SELECTED+=("${OPTIONAL_ORDER[$i]}")
     done
+
+    return 0
 }
-
-echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
-echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
-
-echo ""
-echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
-optional_phase2_extras
-
-# If user pressed 'b', return to main menu
-if [[ $? -eq 1 ]]; then
-    echo -e "\e[33m↩️  Returning to main menu...\e[0m"
-    continue
-fi
-
-
 # Wrapper for Phase 2 optional extras
 optional_phase2_extras() {
-    # Use the existing checklist UI
-    optional_checklist
-
-    # If user pressed 'b', optional_checklist will not detect it
-    # so we manually check for empty input + 'b'
-    if [[ "$opt" == "b" ]]; then
+    if ! optional_checklist; then
         return 1
     fi
 
     # Copy SELECTED → PHASE2_OPTIONAL_SELECTED
     PHASE2_OPTIONAL_SELECTED=("${SELECTED[@]}")
+
+    return 0
 }
 
 
@@ -330,7 +313,7 @@ while true; do
     echo ""
     phase_label 1 "Phase 1 — OS prep + distro upgrade      (ends with reboot)"
     phase_label 2 "Phase 2 — Flsun sp_installer1 + KIAUH prep (ends with reboot)"
-    echo -e "  \e[33m5)\e[0m  Run individual script"
+    echo -e "  \e[33m3)\e[0m  Run individual script"
     if [[ "$debugMode" -eq 1 ]]; then
         echo -e "  \e[33md)\e[0m  Debug mode          \e[32m[ON]\e[0m"
     else
@@ -345,34 +328,45 @@ while true; do
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
-2)
-    echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
-    echo -e "\e[33m⚠️  This phase ends with a system reboot (sp_installer1).\e[0m"
+        2)
+            echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+            echo -e "\e[33m⚠️  This phase ends with a system reboot.\e[0m"
 
-    echo ""
-    echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
-    optional_phase2_extras
+            echo ""
+            echo -e "\e[36mSelect optional Phase 2 extras:\e[0m"
+            if ! optional_phase2_extras; then
+                echo -e "\e[33m↩️  Returning to main menu...\e[0m"
+                continue
+            fi
 
-    if [[ $? -eq 1 ]]; then
-        echo -e "\e[33m↩️  Returning to main menu...\e[0m"
-        continue
-    fi
+            if ! run_sequence "${PHASE2_SCRIPTS[@]}"; then
+                echo -e "\e[31m❌ Phase 2 core steps failed. Returning to main menu for analysis.\e[0m"
+                continue
+            fi
 
-    
-
-
-           
-    3)
-            echo -e "\n\e[36m=== Optional Extras ===\e[0m"
-            optional_checklist
-            if [[ ${#SELECTED[@]} -gt 0 ]]; then
-                run_sequence "${SELECTED[@]}"
+            if [[ ${#PHASE2_OPTIONAL_SELECTED[@]} -gt 0 ]]; then
+                echo -e "\n\e[36m=== Phase 2 Optional Extras ===\e[0m"
+                if ! run_sequence "${PHASE2_OPTIONAL_SELECTED[@]}"; then
+                    echo -e "\e[31m❌ Optional extras failed. Phase 2 was not marked complete and reboot was skipped.\e[0m"
+                    continue
+                fi
             else
-                echo -e "\e[33m⚠️  Nothing selected.\e[0m"
+                echo -e "\e[33m⚠️  No optional extras selected.\e[0m"
+            fi
+
+            if ! run_script "mark_phase2_complete.sh"; then
+                echo -e "\e[31m❌ Could not mark Phase 2 complete. Reboot skipped.\e[0m"
+                continue
+            fi
+            mark_phase_done 2
+
+            if ! run_script "reboot.sh"; then
+                echo -e "\e[31m❌ Reboot step failed. Returning to main menu for analysis.\e[0m"
+                continue
             fi
             ;;
 
-        4)
+        3)
             menu_individual
             ;;
 

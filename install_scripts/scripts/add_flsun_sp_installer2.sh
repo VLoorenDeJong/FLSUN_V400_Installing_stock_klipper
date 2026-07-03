@@ -41,8 +41,6 @@ print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
 # --- Variables ---
 readonly INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer2.sh"
-readonly TARGET_DIR="/home/pi"
-readonly TARGET_SCRIPT="${TARGET_DIR}/sp_installer2.sh"
 readonly STATE_DIR="/var/lib/linuxsetups"
 readonly STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer2.done"
 FORCE_RUN="${FORCE_RUN_FL_SP_INSTALLER2:-0}"
@@ -55,6 +53,23 @@ fi
 
 if ! command -v curl >/dev/null 2>&1; then
     show_progress "📦 Installing curl" "apt-get install -y -qq curl >/dev/null 2>&1"
+fi
+
+TARGET_USER="${SUDO_USER:-}"
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+    if id pi >/dev/null 2>&1; then
+        TARGET_USER="pi"
+    else
+        TARGET_USER="$(whoami)"
+    fi
+fi
+
+TARGET_DIR="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+TARGET_SCRIPT="${TARGET_DIR}/sp_installer2.sh"
+
+if [ -z "$TARGET_DIR" ]; then
+    print_error "Could not determine home directory for user: $TARGET_USER"
+    exit 1
 fi
 
 if [ ! -d "$TARGET_DIR" ]; then

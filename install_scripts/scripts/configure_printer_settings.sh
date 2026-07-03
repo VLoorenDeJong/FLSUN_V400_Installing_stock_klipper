@@ -150,11 +150,7 @@ requirements: scripts/KlipperScreen-requirements.txt
 system_dependencies: scripts/system-dependencies.json
 managed_services: KlipperScreen"
 
-if grep -q "^
-
-\[update_manager KlipperScreen\]
-
-" "$MOONRAKER_CONF"; then
+if grep -q '^\[update_manager KlipperScreen\]' "$MOONRAKER_CONF"; then
     print_warning "KlipperScreen update_manager block already present"
 else
     print_status "Adding KlipperScreen update_manager block..."
@@ -171,11 +167,7 @@ fi
 
 print_status "Ensuring [file_manager] section exists in moonraker.conf..."
 
-if grep -q "^
-
-\[file_manager\]
-
-" "$MOONRAKER_CONF"; then
+if grep -q '^\[file_manager\]' "$MOONRAKER_CONF"; then
     print_success "[file_manager] section already present"
 else
     print_status "Adding [file_manager] section at EOF..."
@@ -189,11 +181,7 @@ fi
 
 print_status "Ensuring [exclude_object] section exists in printer.cfg..."
 
-if grep -q "^
-
-\[exclude_object\]
-
-" "$PRINTER_CFG"; then
+if grep -q '^\[exclude_object\]' "$PRINTER_CFG"; then
     print_success "[exclude_object] section already present"
 else
     print_status "Adding [exclude_object] section at EOF..."
@@ -211,8 +199,8 @@ fi
 
 print_status "Fixing permissions for printer_data..."
 
-sudo chown -R pi:pi /home/pi/printer_data
-sudo chmod -R 775 /home/pi/printer_data
+sudo chown -R "$ACTUAL_USER:$ACTUAL_USER" "$ACTUAL_HOME/printer_data"
+sudo chmod -R 775 "$ACTUAL_HOME/printer_data"
 
 print_success "Permissions repaired."
 
@@ -222,9 +210,9 @@ print_success "Moonraker restarted."
 
 print_success "KlipperScreen + MCU serial + Exclude Object configuration completed."
 # Fix permissions for .theme folder (custom CSS)
-if [ -d "/home/pi/printer_data/config/.theme" ]; then
+if [ -d "$ACTUAL_HOME/printer_data/config/.theme" ]; then
     print_status "Fixing permissions for .theme folder..."
-    sudo chown -R pi:pi /home/pi/printer_data/config/.theme
-    sudo chmod -R 775 /home/pi/printer_data/config/.theme
+    sudo chown -R "$ACTUAL_USER:$ACTUAL_USER" "$ACTUAL_HOME/printer_data/config/.theme"
+    sudo chmod -R 775 "$ACTUAL_HOME/printer_data/config/.theme"
     print_success ".theme permissions repaired."
 fi

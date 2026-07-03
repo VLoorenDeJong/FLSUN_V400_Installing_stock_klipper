@@ -9,7 +9,17 @@ print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
 # --- Variables ---
-readonly PI_HOME="/home/pi"
+ACTUAL_USER="${SUDO_USER:-}"
+if [ -z "$ACTUAL_USER" ] || [ "$ACTUAL_USER" = "root" ]; then
+    if id pi >/dev/null 2>&1; then
+        ACTUAL_USER="pi"
+    else
+        ACTUAL_USER="$(whoami)"
+    fi
+fi
+
+ACTUAL_HOME="$(getent passwd "$ACTUAL_USER" | cut -d: -f6)"
+readonly PI_HOME="$ACTUAL_HOME"
 readonly KIAUH_DIR="${PI_HOME}/kiauh"
 
 # --- Validation ---
@@ -29,8 +39,8 @@ print_header "Fix KIAUH Permissions"
 # Steps 530-532: fix kiauh ownership and git safe directory
 if [ -d "$KIAUH_DIR" ]; then
     print_status "Fixing ownership of $KIAUH_DIR..."
-    sudo chown -R pi:pi "$KIAUH_DIR"
-    sudo -u pi git config --global --add safe.directory "$KIAUH_DIR" 2>/dev/null || true
+    sudo chown -R "$ACTUAL_USER:$ACTUAL_USER" "$KIAUH_DIR"
+    sudo -u "$ACTUAL_USER" git config --global --add safe.directory "$KIAUH_DIR" 2>/dev/null || true
     print_success "KIAUH permissions fixed."
 else
     print_warning "KIAUH directory not found at $KIAUH_DIR — skipping permission fix."

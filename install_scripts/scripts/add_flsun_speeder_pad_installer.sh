@@ -4,8 +4,6 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 
 INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer1.sh"
-TARGET_DIR="/home/pi"
-TARGET_SCRIPT="${TARGET_DIR}/sp_installer1.sh"
 STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
 FORCE_RUN="${FORCE_RUN_FL_SPEEDEDPAD_INSTALLER:-0}"
@@ -19,6 +17,23 @@ if ! command -v curl >/dev/null 2>&1; then
     echo -e "\e[34m🔧 Installing curl\e[0m"
     apt-get update -qq
     apt-get install -y -qq curl
+fi
+
+TARGET_USER="${SUDO_USER:-}"
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+    if id pi >/dev/null 2>&1; then
+        TARGET_USER="pi"
+    else
+        TARGET_USER="$(whoami)"
+    fi
+fi
+
+TARGET_DIR="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+TARGET_SCRIPT="${TARGET_DIR}/sp_installer1.sh"
+
+if [ -z "$TARGET_DIR" ]; then
+    echo -e "\e[31m❌ Could not determine home directory for user: $TARGET_USER\e[0m"
+    exit 1
 fi
 
 if [ ! -d "$TARGET_DIR" ]; then
