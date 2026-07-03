@@ -55,10 +55,10 @@ for idx in "${!scripts[@]}"; do
   fi
 
   if "$checker" -n "$f"; then
-    ((ok_count++))
+    ok_count=$((ok_count + 1))
     printf '\033[92mOK\033[0m      [%s] %s\n' "$checker" "$f"
   else
-    ((err_count++))
+    err_count=$((err_count + 1))
     failed_details+=("[$checker] $f")
     printf '\033[31mFAILED\033[0m  [%s] %s\n' "$checker" "$f"
   fi
