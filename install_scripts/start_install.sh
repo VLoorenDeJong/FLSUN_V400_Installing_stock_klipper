@@ -16,8 +16,9 @@
 debugMode=0
 
 STATE_DIR="/var/lib/linuxsetups"
-LOG_FILE="/var/log/flsun_installer.log"
+LOG_FILE="/var/log/install_scripts.log"
 export LOG_FILE
+
 # -----------------------------------------------------------------------------
 # KIAUH version pin (optional)
 # Leave empty to use the latest master. Set to a tag, branch, or commit SHA
@@ -330,10 +331,12 @@ while true; do
     case "$MAIN_CHOICE" in
         1)
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
+            echo -e "\e[33mTo monitor progress, run:\e[0m sudo tail -F $LOG_FILE"
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
             echo -e "\n\e[36m=== Phase 2 — Flsun sp_installer1 + KIAUH Prep ===\e[0m"
+            echo -e "\e[33mTo monitor progress, run:\e[0m sudo tail -F $LOG_FILE"
             echo -e "\e[33m⚠️  This phase ends with a system reboot.\e[0m"
 
             echo ""
