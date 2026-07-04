@@ -19,6 +19,7 @@
 - Match answer length to question complexity. One-line for one-line.
 - Skip hollow affirmations ("Certainly!", "Great question!").
 - Light connective filler ("Done.", "Got it.") is fine.
+- MUST not waste tokens with the response size or verbosity of a human. Be concise.
 
 ---
 

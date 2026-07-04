@@ -16,7 +16,8 @@
 debugMode=0
 
 STATE_DIR="/var/lib/linuxsetups"
-
+LOG_FILE="/var/log/flsun_installer.log"
+export LOG_FILE
 # -----------------------------------------------------------------------------
 # KIAUH version pin (optional)
 # Leave empty to use the latest master. Set to a tag, branch, or commit SHA
@@ -65,12 +66,11 @@ PHASE1_SCRIPTS=(
     "updates_install_and_clean.sh"
     "update_kernel.sh"
     "upgrade_distro.sh"
+    "add_bash_show_branch_name.sh"
     "configure_locale_and_wifi_country.sh"
     "add_network_manager.sh"
     "install_wifi_toggle_service.sh"          # Install the timed WiFi toggle service (Network manager causes WiFi instability, this will keep that minimized)
-    "add_bash_show_branch_name.sh"
     # Print Phase 1 completion message before network disruption
-    "print_phase1_success.sh"              # Custom script to notify user before connection loss
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
     "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
     "reboot.sh"                           # This is for testing
@@ -135,6 +135,8 @@ run_script() {
             run_lock_fix ;;
     esac
 
+    echo "[INFO] Starting: $script_name at $(date -Iseconds)" | tee -a "$LOG_FILE"
+
     echo -e "\e[34m🚀 Running: $script_name\e[0m"
     local run_cmd="bash"
     [[ "$debugMode" -eq 1 ]] && run_cmd="bash -x"
@@ -146,11 +148,13 @@ run_script() {
     [[ ! -r /dev/tty ]] && tty_src="/dev/stdin"
 
     if $run_cmd "$script_path" "${script_args[@]}" <"$tty_src"; then
+        echo "[SUCCESS] $script_name completed at $(date -Iseconds)" | tee -a "$LOG_FILE"
         echo -e "\e[32m✅ Finished: $script_name\e[0m"
         echo ""
         return 0
     else
         local code=$?
+        echo "[ERROR] $script_name failed with exit code $code at $(date -Iseconds)" | tee -a "$LOG_FILE"
         echo -e "\e[31m❌ Failed: $script_name (exit code: $code)\e[0m"
         echo -e "\e[33m💡 To debug: sudo bash -x '$script_path'\e[0m"
         echo ""
