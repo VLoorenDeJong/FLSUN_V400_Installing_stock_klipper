@@ -136,7 +136,7 @@ run_script() {
             run_lock_fix ;;
     esac
 
-    echo "[INFO] Starting: $script_name at $(date -Iseconds)" | tee -a "$LOG_FILE"
+    echo "[INFO] Starting: $script_name at $(date -Iseconds)" >> "$LOG_FILE"
 
     echo -e "\e[34m🚀 Running: $script_name\e[0m"
     local run_cmd="bash"
@@ -149,13 +149,13 @@ run_script() {
     [[ ! -r /dev/tty ]] && tty_src="/dev/stdin"
 
     if $run_cmd "$script_path" "${script_args[@]}" <"$tty_src"; then
-        echo "[SUCCESS] $script_name completed at $(date -Iseconds)" | tee -a "$LOG_FILE"
+        echo "[SUCCESS] $script_name completed at $(date -Iseconds)" >> "$LOG_FILE"
         echo -e "\e[32m✅ Finished: $script_name\e[0m"
         echo ""
         return 0
     else
         local code=$?
-        echo "[ERROR] $script_name failed with exit code $code at $(date -Iseconds)" | tee -a "$LOG_FILE"
+        echo "[ERROR] $script_name failed with exit code $code at $(date -Iseconds)" >> "$LOG_FILE"
         echo -e "\e[31m❌ Failed: $script_name (exit code: $code)\e[0m"
         echo -e "\e[33m💡 To debug: sudo bash -x '$script_path'\e[0m"
         echo ""
