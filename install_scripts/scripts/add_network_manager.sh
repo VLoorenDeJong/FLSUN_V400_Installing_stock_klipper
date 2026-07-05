@@ -203,6 +203,37 @@ fi
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
+print_header "Fixing DNS configuration (Google + Router)"
+
+# Ensure NetworkManager uses systemd-resolved for DNS
+print_status "Configuring NetworkManager DNS"
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/dns.conf <<'EOF'
+[main]
+dns=systemd-resolved
+EOF
+chmod 644 /etc/NetworkManager/conf.d/dns.conf
+
+# Ensure resolv.conf points to systemd-resolved
+if [ "$(readlink /etc/resolv.conf)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
+    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+    print_success "Linked /etc/resolv.conf to systemd-resolved stub"
+else
+    print_status "resolv.conf already linked to systemd-resolved"
+fi
+
+# Force DNS servers (Google + Router)
+print_status "Applying DNS servers: 8.8.8.8 and 192.168.2.1"
+nmcli connection modify wlan0 ipv4.dns "8.8.8.8 192.168.2.1"
+nmcli connection modify wlan0 ipv4.ignore-auto-dns yes
+
+# Restart services to apply DNS
+print_status "Restarting DNS resolver and NetworkManager"
+systemctl restart systemd-resolved || true
+systemctl restart NetworkManager || true
+
+print_success "DNS configuration applied successfully"
+
 # 1. Disable competing network managers so they do NOT restart after reboot.
 #    This system uses systemd-networkd (not dhcpcd) — it MUST be disabled.
 #    wpa_supplicant runs in D-Bus mode (-u -s); NM reuses it, so only STOP it.
