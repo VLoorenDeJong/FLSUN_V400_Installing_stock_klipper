@@ -203,7 +203,15 @@ fi
 # --- Mitigations for connection issues ---
 print_header "Mitigating NetworkManager connection issues"
 
-print_header "Fixing DNS configuration (Google + Router)"
+# Detect router DNS dynamically
+ROUTER_DNS=$(nmcli dev show wlan0 | grep 'IP4.DNS' | awk '{print $2}' | head -n1)
+
+if [ -z "$ROUTER_DNS" ]; then
+    print_warning "Could not detect router DNS automatically. Falling back to Google only."
+    ROUTER_DNS="8.8.8.8"
+else
+    print_status "Detected router DNS: $ROUTER_DNS"
+fi
 
 # Ensure NetworkManager uses systemd-resolved for DNS
 print_status "Configuring NetworkManager DNS"
@@ -222,9 +230,9 @@ else
     print_status "resolv.conf already linked to systemd-resolved"
 fi
 
-# Force DNS servers (Google + Router)
-print_status "Applying DNS servers: 8.8.8.8 and 192.168.2.1"
-nmcli connection modify wlan0 ipv4.dns "8.8.8.8 192.168.2.1"
+# Apply DNS (Google + router)
+print_status "Applying DNS servers: 8.8.8.8 and $ROUTER_DNS"
+nmcli connection modify wlan0 ipv4.dns "8.8.8.8 $ROUTER_DNS"
 nmcli connection modify wlan0 ipv4.ignore-auto-dns yes
 
 # Restart services to apply DNS
@@ -233,6 +241,7 @@ systemctl restart systemd-resolved || true
 systemctl restart NetworkManager || true
 
 print_success "DNS configuration applied successfully"
+
 
 # 1. Disable competing network managers so they do NOT restart after reboot.
 #    This system uses systemd-networkd (not dhcpcd) — it MUST be disabled.
