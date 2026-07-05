@@ -1,12 +1,6 @@
 #!/bin/bash
 set -e
 
-DEBUG=true
-LOG_FILE="/var/log/flsun_installer.log"
-
-# Redirect ALL output of this script into the log file
-exec >> "$LOG_FILE" 2>&1
-
 export DEBIAN_FRONTEND=noninteractive
 
 INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer1.sh"
@@ -14,7 +8,8 @@ STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
 FORCE_RUN="${FORCE_RUN_FL_SPEEDEDPAD_INSTALLER:-0}"
 # Enable debug mode for this script only
-
+DEBUG=true
+LOG_FILE="/var/log/flsun_installer.log"
 
 debug() {
     [ "$DEBUG" = "true" ] && echo "[DEBUG][speeder_pad_installer] $1" >> "$LOG_FILE"
@@ -31,7 +26,14 @@ if ! command -v curl >/dev/null 2>&1; then
     apt-get install -y -qq curl
 fi
 
-TARGET_USER="${SUDO_USER:-$(logname)}"
+TARGET_USER="${SUDO_USER:-}"
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+    if id pi >/dev/null 2>&1; then
+        TARGET_USER="pi"
+    else
+        TARGET_USER="$(whoami)"
+    fi
+fi
 
 TARGET_DIR="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 TARGET_SCRIPT="${TARGET_DIR}/sp_installer1.sh"
@@ -54,7 +56,33 @@ if [ -f "$STATE_FILE" ] && [ "$FORCE_RUN" != "1" ]; then
 fi
 
 echo -e "\e[34m🔧 Downloading Speeder Pad installer to $TARGET_SCRIPT\e[0m"
-curl -fsSL "$INSTALLER_URL" -o "$TARGET_SCRIPT"
+
+# -------------------------------
+# NEW: fallback logic
+# -------------------------------
+
+# Resolve repo root relative to this script
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FALLBACK_INSTALLER="${REPO_ROOT}/install_scripts/scripts/FallbackCopiedScripts/sp_installer1.sh"
+
+debug "Repo root resolved to: $REPO_ROOT"
+debug "Fallback installer path: $FALLBACK_INSTALLER"
+
+if curl -fsSL "$INSTALLER_URL" -o "$TARGET_SCRIPT"; then
+    debug "Remote installer downloaded successfully."
+else
+    echo -e "\e[33m⚠️ Remote installer unavailable, using fallback.\e[0m"
+    debug "Remote installer download failed."
+
+    if [ -f "$FALLBACK_INSTALLER" ]; then
+        cp "$FALLBACK_INSTALLER" "$TARGET_SCRIPT"
+        debug "Fallback installer copied to $TARGET_SCRIPT"
+    else
+        echo -e "\e[31m❌ Fallback installer not found at: $FALLBACK_INSTALLER\e[0m"
+        exit 1
+    fi
+fi
+
 chmod +x "$TARGET_SCRIPT"
 
 echo -e "\e[34m🚀 Running Speeder Pad installer\e[0m"

@@ -87,10 +87,32 @@ fi
 # --- Main ---
 print_header "Flsun Speeder Pad — sp_installer2"
 
-show_progress "📥 Downloading sp_installer2.sh" \
-    "curl -fsSL '$INSTALLER_URL' -o '$TARGET_SCRIPT'"
+# ---------------------------------------------------------
+# NEW: Fallback logic for sp_installer2.sh
+# ---------------------------------------------------------
+
+# Resolve repo root relative to this script
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+FALLBACK_INSTALLER="${REPO_ROOT}/install_scripts/scripts/FallbackCopiedScripts/sp_installer2.sh"
+
+print_status "📥 Downloading sp_installer2.sh"
+
+if curl -fsSL "$INSTALLER_URL" -o "$TARGET_SCRIPT"; then
+    print_success "Downloaded to $TARGET_SCRIPT"
+else
+    print_warning "Remote installer unavailable, using fallback instead."
+    print_status "Fallback: $FALLBACK_INSTALLER"
+
+    if [ -f "$FALLBACK_INSTALLER" ]; then
+        cp "$FALLBACK_INSTALLER" "$TARGET_SCRIPT"
+        print_success "Fallback installer copied to $TARGET_SCRIPT"
+    else
+        print_error "Fallback installer not found at: $FALLBACK_INSTALLER"
+        exit 1
+    fi
+fi
+
 chmod +x "$TARGET_SCRIPT"
-print_success "Downloaded to $TARGET_SCRIPT"
 
 print_status "Running sp_installer2.sh..."
 bash "$TARGET_SCRIPT"
