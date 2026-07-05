@@ -451,4 +451,22 @@ else
     echo "[SAFETY] Network not detected as up. Rollback reboot will occur unless cancelled manually."
 fi
 
-print_success "NetworkManager mitigations complete. Reboot recommended."
+print_status "Restoring NetworkManager service..."
+
+show_progress "Restarting NetworkManager"
+sudo systemctl restart NetworkManager
+
+show_progress "Enabling networking"
+sudo nmcli networking on
+
+show_progress "Enabling WiFi radio"
+sudo nmcli radio wifi on
+
+show_progress "Reconnecting wlan0"
+sudo nmcli device connect wlan0 || print_warning "Could not auto-connect wlan0"
+
+show_progress "Restarting DNS resolver"
+sudo systemctl restart systemd-resolved
+
+print_status "Network connection restored successfully"
+

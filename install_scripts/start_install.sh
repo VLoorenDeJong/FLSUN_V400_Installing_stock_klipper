@@ -69,7 +69,7 @@ PHASE1_SCRIPTS=(
     #"upgrade_distro.sh"
     "add_bash_show_branch_name.sh"
     "configure_locale_and_wifi_country.sh"
-    #"add_network_manager.sh"
+    "add_network_manager.sh"
     "install_wifi_toggle_service.sh"          # Install the timed WiFi toggle service (Network manager causes WiFi instability, this will keep that minimized)
     # Print Phase 1 completion message before network disruption
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
