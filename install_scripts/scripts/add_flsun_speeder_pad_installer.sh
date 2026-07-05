@@ -7,6 +7,13 @@ INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-P
 STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
 FORCE_RUN="${FORCE_RUN_FL_SPEEDEDPAD_INSTALLER:-0}"
+# Enable debug mode for this script only
+DEBUG=true
+LOG_FILE="/var/log/flsun_installer.log"
+
+debug() {
+    [ "$DEBUG" = "true" ] && echo "[DEBUG][speeder_pad_installer] $1" >> "$LOG_FILE"
+}
 
 if [ "$(id -u)" -ne 0 ]; then
     echo -e "\e[31m❌ This script must run with sudo/root privileges.\e[0m"
