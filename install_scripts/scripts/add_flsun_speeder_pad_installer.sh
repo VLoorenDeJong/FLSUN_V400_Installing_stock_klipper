@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+DEBUG=true
+LOG_FILE="/var/log/flsun_installer.log"
+
+# Redirect ALL output of this script into the log file
+exec >> "$LOG_FILE" 2>&1
+
 export DEBIAN_FRONTEND=noninteractive
 
 INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer1.sh"
@@ -8,8 +14,7 @@ STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
 FORCE_RUN="${FORCE_RUN_FL_SPEEDEDPAD_INSTALLER:-0}"
 # Enable debug mode for this script only
-DEBUG=true
-LOG_FILE="/var/log/flsun_installer.log"
+
 
 debug() {
     [ "$DEBUG" = "true" ] && echo "[DEBUG][speeder_pad_installer] $1" >> "$LOG_FILE"
@@ -26,14 +31,7 @@ if ! command -v curl >/dev/null 2>&1; then
     apt-get install -y -qq curl
 fi
 
-TARGET_USER="${SUDO_USER:-}"
-if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
-    if id pi >/dev/null 2>&1; then
-        TARGET_USER="pi"
-    else
-        TARGET_USER="$(whoami)"
-    fi
-fi
+TARGET_USER="${SUDO_USER:-$(logname)}"
 
 TARGET_DIR="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 TARGET_SCRIPT="${TARGET_DIR}/sp_installer1.sh"
