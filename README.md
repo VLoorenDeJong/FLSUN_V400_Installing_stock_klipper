@@ -59,6 +59,13 @@ This installer relies on the following open‑source projects:
 - **FLSUN** — Original Speeder Pad hardware and base environment  
   https://flsun3d.com
 
+  - **Samba** — File and printer sharing for Linux/Windows networks  
+  https://www.samba.org
+
+- **Webmin** — Web-based system administration interface  
+  https://webmin.com
+
+
 ## Additional Resources
 
 This project also benefited from community knowledge shared in the following tutorial:
@@ -70,10 +77,8 @@ This video provided general guidance and context for the installation workflow.
 
 ## AI Assistance
 
-This project was generated using AI tools (Microsoft Copilot).  
+This project was generated using AI tools (Copilot).  
 My programming experience is in C#, so the Bash scripts and automation logic were produced by AI.
-
-
 
 <br/>
   
@@ -165,6 +170,7 @@ Automated install support in 2 phases for:
 ## Phase 1 prompt suggestions
 
 <details>
+
 ![LTS/Normal](ReadmeFiles/image-7.png)
 
 <br/>
