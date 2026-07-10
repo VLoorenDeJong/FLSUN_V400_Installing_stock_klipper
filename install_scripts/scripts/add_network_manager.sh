@@ -199,49 +199,24 @@ else
     print_success "NetworkManager/nmcli already installed."
 fi
 
+print_header "Flushing DNS and requesting fresh DNS from router"
 
-# --- Mitigations for connection issues ---
-print_header "Mitigating NetworkManager connection issues"
+print_status "Detecting active WiFi connection profile"
+ACTIVE_WIFI_CON=$(nmcli -t -f NAME,DEVICE,TYPE connection show \
+  | awk -F: '$2=="wlan0" && $3=="802-11-wireless"{print $1; exit}')
+print_status "Active WiFi profile: $ACTIVE_WIFI_CON"
 
-# Detect router DNS dynamically
-ROUTER_DNS=$(nmcli dev show wlan0 | grep 'IP4.DNS' | awk '{print $2}' | head -n1)
+print_status "Flushing systemd-resolved cache"
+systemd-resolve --flush-caches || true
 
-if [ -z "$ROUTER_DNS" ]; then
-    print_warning "Could not detect router DNS automatically. Falling back to Google only."
-    ROUTER_DNS="8.8.8.8"
-else
-    print_status "Detected router DNS: $ROUTER_DNS"
-fi
-
-# Ensure NetworkManager uses systemd-resolved for DNS
-print_status "Configuring NetworkManager DNS"
-mkdir -p /etc/NetworkManager/conf.d
-cat > /etc/NetworkManager/conf.d/dns.conf <<'EOF'
-[main]
-dns=systemd-resolved
-EOF
-chmod 644 /etc/NetworkManager/conf.d/dns.conf
-
-# Ensure resolv.conf points to systemd-resolved
-if [ "$(readlink /etc/resolv.conf)" != "/run/systemd/resolve/stub-resolv.conf" ]; then
-    ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-    print_success "Linked /etc/resolv.conf to systemd-resolved stub"
-else
-    print_status "resolv.conf already linked to systemd-resolved"
-fi
-
-# Apply DNS (Google + router)
-print_status "Applying DNS servers: 8.8.8.8 and $ROUTER_DNS"
-nmcli connection modify wlan0 ipv4.dns "8.8.8.8 $ROUTER_DNS"
-nmcli connection modify wlan0 ipv4.ignore-auto-dns yes
-
-# Restart services to apply DNS
-print_status "Restarting DNS resolver and NetworkManager"
+print_status "Restarting systemd-resolved"
 systemctl restart systemd-resolved || true
-systemctl restart NetworkManager || true
 
-print_success "DNS configuration applied successfully"
+print_status "Renewing DHCP lease via NetworkManager"
+nmcli connection down "$ACTIVE_WIFI_CON" || true
+nmcli connection up "$ACTIVE_WIFI_CON" || true
 
+print_success "DNS refreshed from router"
 
 # 1. Disable competing network managers so they do NOT restart after reboot.
 #    This system uses systemd-networkd (not dhcpcd) — it MUST be disabled.
