@@ -39,14 +39,19 @@ detect_versions() {
         printf "   → Testing %-12s " "$pkg"
 
         if apt-get install -s "$pkg" >/dev/null 2>&1; then
-            printf "✔ installable\n"
-            AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+            # Check if the binary exists in the .deb
+            DEB=$(apt-get download -qq "$pkg" 2>/dev/null)
+            if dpkg-deb --contents "$DEB" | grep -q "/usr/bin/python3"; then
+                printf "✔ installable\n"
+                AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+            else
+                printf "❌ no binary in package\n"
+            fi
         else
             printf "❌ not installable\n"
         fi
     done
 }
-
 
 detect_versions 
 printf "\n"
