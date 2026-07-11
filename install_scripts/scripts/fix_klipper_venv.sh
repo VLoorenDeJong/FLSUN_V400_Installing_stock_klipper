@@ -4,12 +4,6 @@ set -e
 # =============================================================================
 # Fix Klipper virtualenv after KIAUH install (steps 093.2 - 093.8)
 # =============================================================================
-# After KIAUH installs Klipper, the klippy-env may have a broken aenum version
-# that causes Klipper to crash at startup. This script pins aenum to 3.1.11,
-# installs wheel, and re-installs all Klipper Python requirements.
-#
-# Run this AFTER the first KIAUH session (after installing Klipper).
-# =============================================================================
 
 print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
 print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
@@ -17,6 +11,36 @@ print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
+# Busy indicator (dot every 5 seconds)
+show_progress() {
+    local message="$1"
+    local command="$2"
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    printf "\033[34m%s\033[0m\n" "$message"
+    eval "$command" &
+    local cmd_pid=$!
+    local start_time=$(date +%s)
+
+    while kill -0 $cmd_pid 2>/dev/null; do
+        printf "."
+        sleep "$interval"
+        local current_time=$(date +%s)
+        if (( current_time - start_time > timeout )); then
+            printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
+            kill -TERM $cmd_pid 2>/dev/null || true
+            sleep 2
+            kill -KILL $cmd_pid 2>/dev/null || true
+            return 1
+        fi
+    done
+
+    wait $cmd_pid 2>/dev/null
+    printf "\n"
+    return $?
+}
+
+# Root check
 if [ "$(id -u)" -ne 0 ]; then
     print_error "This script must run with sudo/root privileges."
     exit 1
@@ -36,7 +60,7 @@ PYTHON="${KLIPPY_ENV}/bin/python"
 
 print_header "Fix Klipper Virtual Environment (steps 093.2-093.8)"
 
-# --- Ensure system deps needed by some Python packages (e.g. sdbus) ---
+# --- Ensure system deps ---
 print_status "Checking system build dependencies (pkg-config, libsystemd-dev)..."
 MISSING_DEPS=()
 for pkg in pkg-config libsystemd-dev; do
@@ -68,29 +92,35 @@ if [ ! -f "$REQUIREMENTS" ]; then
     exit 0
 fi
 
-# --- Upgrade pip inside klippy-env first ---
-print_status "Upgrading pip inside klippy-env..."
-sudo -u "$TARGET_USER" "$PIP" install --upgrade pip --quiet
+# --- Upgrade pip ---
+show_progress "Upgrading pip inside klippy-env..." \
+    "sudo -u \"$TARGET_USER\" \"$PIP\" install --upgrade pip --quiet"
+
 new_ver=$(sudo -u "$TARGET_USER" "$PIP" --version 2>/dev/null | awk '{print $2}')
 print_success "pip → $new_ver in klippy-env"
 
-# --- Fix aenum version (step 093.4-093.5) ---
-print_status "Pinning aenum to 3.1.11..."
-sudo -u "$TARGET_USER" "$PIP" uninstall -y aenum 2>/dev/null || true
-sudo -u "$TARGET_USER" "$PIP" install aenum==3.1.11 --quiet
+# --- Fix aenum ---
+show_progress "Pinning aenum to 3.1.11..." \
+    "sudo -u \"$TARGET_USER\" \"$PIP\" uninstall -y aenum 2>/dev/null || true"
+
+show_progress "Installing aenum==3.1.11..." \
+    "sudo -u \"$TARGET_USER\" \"$PIP\" install aenum==3.1.11 --quiet"
+
 print_success "aenum pinned to 3.1.11"
 
-# --- Install wheel (step 093.6) ---
-print_status "Installing wheel..."
-sudo -u "$TARGET_USER" "$PIP" install wheel --quiet
+# --- Install wheel ---
+show_progress "Installing wheel..." \
+    "sudo -u \"$TARGET_USER\" \"$PIP\" install wheel --quiet"
+
 print_success "wheel installed"
 
-# --- Re-install all Klipper requirements (step 093.7) ---
-print_status "Installing Klipper Python requirements..."
-sudo -u "$TARGET_USER" "$PIP" install -r "$REQUIREMENTS" --quiet
+# --- Install Klipper requirements ---
+show_progress "Installing Klipper Python requirements..." \
+    "sudo -u \"$TARGET_USER\" \"$PIP\" install -r \"$REQUIREMENTS\" --quiet"
+
 print_success "Klipper requirements installed successfully"
 
-# --- Verify Python can import the main Klipper module ---
+# --- Verify import ---
 if sudo -u "$TARGET_USER" "$PYTHON" -c "import klippy" 2>/dev/null; then
     print_success "Klipper import verification passed"
 else
