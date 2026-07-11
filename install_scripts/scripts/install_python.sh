@@ -34,8 +34,8 @@ AVAILABLE_PYTHON_VERSIONS=()
 
 detect_versions() {
     for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-        # FIX: Only accept real installable versions
-        if apt-cache policy "$pkg" | grep -q "Candidate: [1-9][0-9]*"; then
+        # Only accept versions that apt can actually install
+        if run_privileged apt-get install -s "$pkg" >/dev/null 2>&1; then
             AVAILABLE_PYTHON_VERSIONS+=("$pkg")
         fi
     done
