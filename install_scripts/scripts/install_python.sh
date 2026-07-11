@@ -27,20 +27,25 @@ show_progress() {
 }
 
 print_status "Detecting available Python versions"
-(
-    LATEST_PY=""
-    AVAILABLE_PYTHON_VERSIONS=()
 
+# FIX: must NOT run detection inside a subshell
+LATEST_PY=""
+AVAILABLE_PYTHON_VERSIONS=()
+
+detect_versions() {
     for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-    # FIX: Only accept real installable versions
-    if apt-cache policy "$pkg" | grep -q "Candidate: [1-9][0-9]*"; then
-        AVAILABLE_PYTHON_VERSIONS+=("$pkg")
-    fi
-done
+        # FIX: Only accept real installable versions
+        if apt-cache policy "$pkg" | grep -q "Candidate: [1-9][0-9]*"; then
+            AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+        fi
+    done
+}
 
-) &
+detect_versions &
 show_progress $!
+wait
 printf "\n"
+
 
 if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
     print_error "No installable Python 3.x versions found"
