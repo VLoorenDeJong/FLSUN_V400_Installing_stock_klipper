@@ -80,9 +80,9 @@ PHASE1_SCRIPTS=(
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
     "cleanup_repositories.sh"
+    "install_python.sh"                   # ensure python3.9 + venv tooling before pip/setuptools fixes
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
-    "install_python.sh"                 # ensure python3.9 + venv tooling before pip/setuptools fixes
     "fix_pip_venvs.sh"                    # patch ensurepip + setuptools before KIAUH
     "start_kiauh.sh 1"                    # SESSION 1: remove old Flsun packages
     "cleanup_flsun_builds.sh"             # remove Flsun-specific dirs/configs
