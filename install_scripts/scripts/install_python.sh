@@ -27,15 +27,19 @@ show_progress() {
 }
 
 print_status "Detecting available Python versions"
+(
+    LATEST_PY=""
+    AVAILABLE_PYTHON_VERSIONS=()
 
-LATEST_PY=""
-AVAILABLE_PYTHON_VERSIONS=()
-
-for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-    if apt-cache policy "$pkg" | grep -q "Candidate: [0-9]"; then
-        AVAILABLE_PYTHON_VERSIONS+=("$pkg")
-    fi
-done
+    for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
+        # FIX: only accept real installable versions
+        if apt-cache policy "$pkg" | grep -q "Candidate: [1-9][0-9]*"; then
+            AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+        fi
+    done
+) &
+show_progress $!
+printf "\n"
 
 if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
     print_error "No installable Python 3.x versions found"
@@ -45,7 +49,7 @@ fi
 LATEST_PY="${AVAILABLE_PYTHON_VERSIONS[-1]}"
 LATEST_VERSION="${LATEST_PY#python}"
 
-print_status "Latest installable Python detected: $LATEST_VERSION"
+print_success "Latest installable Python detected: $LATEST_VERSION"
 
 CURRENT_VERSION=$(python3 --version 2>/dev/null || echo "none")
 
@@ -58,14 +62,16 @@ print_warning "Python is not at latest version (current: $CURRENT_VERSION)"
 print_status "Preparing to install Python $LATEST_VERSION"
 
 print_status "Removing old Python versions"
+(
+    for ver in "${AVAILABLE_PYTHON_VERSIONS[@]}"; do
+        run_privileged apt purge -y "$ver" "$ver-venv" "$ver-distutils" >/dev/null 2>&1 || true
+    done
 
-for ver in "${AVAILABLE_PYTHON_VERSIONS[@]}"; do
-    run_privileged apt purge -y "$ver" "$ver-venv" "$ver-distutils" >/dev/null 2>&1 || true
-done
-
-run_privileged rm -rf /usr/lib/python3.* >/dev/null 2>&1 || true
-run_privileged rm -rf /usr/local/lib/python3.* >/dev/null 2>&1 || true
-
+    run_privileged rm -rf /usr/lib/python3.* >/dev/null 2>&1 || true
+    run_privileged rm -rf /usr/local/lib/python3.* >/dev/null 2>&1 || true
+) &
+show_progress $!
+printf "\n"
 print_success "Old Python versions removed"
 
 print_status "Repairing dpkg state"
@@ -75,11 +81,13 @@ print_status "Repairing dpkg state"
     run_privileged dpkg --configure -a >/dev/null 2>&1 || true
 ) &
 show_progress $!
+printf "\n"
 print_success "dpkg state repaired"
 
 print_status "Updating package lists"
 (run_privileged apt-get update -qq >/dev/null 2>&1) &
 show_progress $!
+printf "\n"
 print_success "Package lists updated"
 
 print_status "Installing Python $LATEST_VERSION packages"
@@ -95,6 +103,7 @@ print_status "Installing Python $LATEST_VERSION packages"
         >/dev/null 2>&1
 ) &
 show_progress $!
+printf "\n"
 print_success "Python $LATEST_VERSION installed"
 
 print_status "Repairing python3 symlink"
@@ -103,6 +112,7 @@ print_status "Repairing python3 symlink"
     run_privileged update-alternatives --set python3 "/usr/bin/$LATEST_PY" >/dev/null 2>&1
 ) &
 show_progress $!
+printf "\n"
 print_success "python3 symlink updated"
 
 FINAL_VERSION=$(python3 --version 2>/dev/null)
@@ -119,6 +129,7 @@ print_status "Testing virtual environment creation"
     python3 -m venv /tmp/python_test_env >/dev/null 2>&1
 ) &
 show_progress $!
+printf "\n"
 
 if [ ! -f "/tmp/python_test_env/bin/activate" ]; then
     print_error "Virtual environment creation failed — Python installation still broken"
