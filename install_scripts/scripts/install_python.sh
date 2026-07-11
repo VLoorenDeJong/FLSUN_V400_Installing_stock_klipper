@@ -42,8 +42,6 @@ detect_versions() {
 }
 
 detect_versions &
-show_progress $!
-wait
 printf "\n"
 
 if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
