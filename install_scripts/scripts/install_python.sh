@@ -111,10 +111,24 @@ show_progress $!
 printf "\n"
 print_success "Python $LATEST_VERSION installed"
 
+# ============================================================
+# FIXED SYMLINK SECTION (minimal changes, correct behavior)
+# ============================================================
+
 print_status "Repairing python3 symlink"
 (
-    run_privileged update-alternatives --install /usr/bin/python3 python3 "/usr/bin/$LATEST_PY" 1 >/dev/null 2>&1
-    run_privileged update-alternatives --set python3 "/usr/bin/$LATEST_PY" >/dev/null 2>&1
+    PYBIN="/usr/bin/$LATEST_PY"
+
+    if [[ ! -x "$PYBIN" ]]; then
+        print_error "Python binary not found at $PYBIN"
+        exit 1
+    fi
+
+    # Register Python version
+    run_privileged update-alternatives --install /usr/bin/python3 python3 "$PYBIN" 2 >/dev/null 2>&1
+
+    # Force python3 → latest version
+    run_privileged update-alternatives --set python3 "$PYBIN" >/dev/null 2>&1
 ) &
 show_progress $!
 printf "\n"
