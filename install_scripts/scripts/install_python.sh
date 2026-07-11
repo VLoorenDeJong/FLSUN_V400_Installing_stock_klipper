@@ -46,7 +46,6 @@ show_progress $!
 wait
 printf "\n"
 
-
 if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
     print_error "No installable Python 3.x versions found"
     exit 1
