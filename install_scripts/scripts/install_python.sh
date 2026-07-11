@@ -34,8 +34,9 @@ AVAILABLE_PYTHON_VERSIONS=()
 
 detect_versions() {
     for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-        # Only accept versions that apt can actually install
-        if run_privileged apt-get install -s "$pkg" >/dev/null 2>&1; then
+        # Only accept versions that apt can install AND dpkg can configure
+        if apt-get install -s "$pkg" >/dev/null 2>&1 &&
+           dpkg-deb --contents "$(apt-get download -qq "$pkg" 2>/dev/null)" 2>/dev/null | grep -q "/usr/bin/python3"; then
             AVAILABLE_PYTHON_VERSIONS+=("$pkg")
         fi
     done
