@@ -69,15 +69,30 @@ print_status "Preparing to install Python $LATEST_VERSION"
 print_status "Removing old Python versions"
 (
     for ver in "${AVAILABLE_PYTHON_VERSIONS[@]}"; do
-        run_privileged apt purge -y "$ver" "$ver-venv" "$ver-distutils" >/dev/null 2>&1 || true
+        # Purge main version package if installed
+        if dpkg -s "$ver" >/dev/null 2>&1; then
+            run_privileged apt purge -y "$ver" >/dev/null 2>&1 || true
+        fi
+
+        # Purge venv package if installed
+        if dpkg -s "$ver-venv" >/dev/null 2>&1; then
+            run_privileged apt purge -y "$ver-venv" >/dev/null 2>&1 || true
+        fi
+
+        # Purge distutils package if installed
+        if dpkg -s "$ver-distutils" >/dev/null 2>&1; then
+            run_privileged apt purge -y "$ver-distutils" >/dev/null 2>&1 || true
+        fi
     done
 
+    # Remove leftover directories
     run_privileged rm -rf /usr/lib/python3.* >/dev/null 2>&1 || true
     run_privileged rm -rf /usr/local/lib/python3.* >/dev/null 2>&1 || true
 ) &
 show_progress $!
 printf "\n"
 print_success "Old Python versions removed"
+
 
 print_status "Repairing dpkg state"
 (
