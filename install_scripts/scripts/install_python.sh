@@ -24,15 +24,35 @@ print_error() {
     printf "\033[31m❌ %s\033[0m\n" "$1"
 }
 
-echo "--------------------------------------------"
-print_status "Installing Python 3.10 environment"
-echo "--------------------------------------------"
+print_status "--------------------------------------------"
+print_status "Checking Python environment"
+print_status "--------------------------------------------"
 
-print_status "Removing old Python 3.9 packages..."
+# Detect current Python version
+CURRENT_VERSION=$(python3 --version 2>/dev/null || echo "none")
+
+if [[ "$CURRENT_VERSION" == *"3.10"* ]]; then
+    print_success "Python 3.10 already installed — skipping full repair"
+    exit 0
+fi
+
+print_warning "Python is not at version 3.10 (current: $CURRENT_VERSION)"
+print_status "Starting full Python repair..."
+
+print_status "--------------------------------------------"
+print_status "Removing old Python 3.9 packages"
+print_status "--------------------------------------------"
+
 sudo apt purge -y python3.9 python3.9-minimal python3.9-venv python3.9-distutils python3.9-lib2to3 python3.9-dev >/dev/null 2>&1
 sudo rm -rf /usr/lib/python3.9 >/dev/null 2>&1
 sudo rm -rf /usr/local/lib/python3.9 >/dev/null 2>&1
 print_success "Python 3.9 removed (or was not present)"
+
+print_status "Repairing dpkg state (if Python 3.9 left broken entries)..."
+sudo dpkg --remove --force-remove-reinstreq python3.9 python3.9-minimal python3.9-dev python3.9-venv >/dev/null 2>&1 || true
+sudo apt --fix-broken install -y >/dev/null 2>&1 || true
+sudo dpkg --configure -a >/dev/null 2>&1 || true
+print_success "dpkg state repaired"
 
 print_status "Updating package lists..."
 sudo apt update -y >/dev/null 2>&1
@@ -70,18 +90,8 @@ fi
 print_success "Virtual environment creation works"
 sudo rm -rf /tmp/python_test_env >/dev/null 2>&1
 
-echo "--------------------------------------------"
+print_status "--------------------------------------------"
 print_success "Python 3.10 environment installed and verified"
-echo "--------------------------------------------"
-
-print_status "Forcing removal of broken Python 3.9 dpkg entries..."
-sudo dpkg --remove --force-remove-reinstreq python3.9 python3.9-minimal python3.9-dev python3.9-venv >/dev/null 2>&1
-print_success "Broken Python 3.9 packages removed from dpkg state"
-
-print_status "Repairing dpkg and fixing broken dependencies..."
-sudo apt --fix-broken install -y >/dev/null 2>&1
-sudo dpkg --configure -a >/dev/null 2>&1
-print_success "dpkg state repaired"
-
+print_status "--------------------------------------------"
 
 exit 0
