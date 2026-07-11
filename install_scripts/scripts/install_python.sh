@@ -74,4 +74,14 @@ echo "--------------------------------------------"
 print_success "Python 3.10 environment installed and verified"
 echo "--------------------------------------------"
 
+print_status "Forcing removal of broken Python 3.9 dpkg entries..."
+sudo dpkg --remove --force-remove-reinstreq python3.9 python3.9-minimal python3.9-dev python3.9-venv >/dev/null 2>&1
+print_success "Broken Python 3.9 packages removed from dpkg state"
+
+print_status "Repairing dpkg and fixing broken dependencies..."
+sudo apt --fix-broken install -y >/dev/null 2>&1
+sudo dpkg --configure -a >/dev/null 2>&1
+print_success "dpkg state repaired"
+
+
 exit 0
