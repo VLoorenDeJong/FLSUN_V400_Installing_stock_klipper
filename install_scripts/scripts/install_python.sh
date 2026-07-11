@@ -18,7 +18,7 @@ print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
 print_warning() { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
 print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
-# Busy indicator (from updates_install_and_clean.sh)
+# Busy indicator (same style as updates_install_and_clean.sh)
 show_progress() {
     while kill -0 "$1" 2>/dev/null; do
         printf "."
@@ -26,9 +26,7 @@ show_progress() {
     done
 }
 
-print_status "--------------------------------------------"
 print_status "Detecting available Python versions"
-print_status "--------------------------------------------"
 
 LATEST_PY=""
 AVAILABLE_PYTHON_VERSIONS=()
@@ -59,11 +57,8 @@ fi
 print_warning "Python is not at latest version (current: $CURRENT_VERSION)"
 print_status "Preparing to install Python $LATEST_VERSION"
 
-print_status "--------------------------------------------"
 print_status "Removing old Python versions"
-print_status "--------------------------------------------"
 
-# Purge only installable versions
 for ver in "${AVAILABLE_PYTHON_VERSIONS[@]}"; do
     run_privileged apt purge -y "$ver" "$ver-venv" "$ver-distutils" >/dev/null 2>&1 || true
 done
@@ -73,7 +68,7 @@ run_privileged rm -rf /usr/local/lib/python3.* >/dev/null 2>&1 || true
 
 print_success "Old Python versions removed"
 
-print_status "Repairing dpkg state..."
+print_status "Repairing dpkg state"
 (
     run_privileged dpkg --remove --force-remove-reinstreq python3.[0-9] >/dev/null 2>&1 || true
     run_privileged apt --fix-broken install -y >/dev/null 2>&1 || true
@@ -82,12 +77,12 @@ print_status "Repairing dpkg state..."
 show_progress $!
 print_success "dpkg state repaired"
 
-print_status "Updating package lists..."
+print_status "Updating package lists"
 (run_privileged apt-get update -qq >/dev/null 2>&1) &
 show_progress $!
 print_success "Package lists updated"
 
-print_status "Installing Python $LATEST_VERSION packages..."
+print_status "Installing Python $LATEST_VERSION packages"
 (
     run_privileged apt-get install -y -qq \
         python3 \
@@ -102,7 +97,7 @@ print_status "Installing Python $LATEST_VERSION packages..."
 show_progress $!
 print_success "Python $LATEST_VERSION installed"
 
-print_status "Repairing python3 symlink..."
+print_status "Repairing python3 symlink"
 (
     run_privileged update-alternatives --install /usr/bin/python3 python3 "/usr/bin/$LATEST_PY" 1 >/dev/null 2>&1
     run_privileged update-alternatives --set python3 "/usr/bin/$LATEST_PY" >/dev/null 2>&1
@@ -118,7 +113,7 @@ fi
 
 print_success "python3 now points to Python $LATEST_VERSION ($FINAL_VERSION)"
 
-print_status "Testing virtual environment creation..."
+print_status "Testing virtual environment creation"
 (
     run_privileged rm -rf /tmp/python_test_env >/dev/null 2>&1
     python3 -m venv /tmp/python_test_env >/dev/null 2>&1
@@ -133,8 +128,6 @@ fi
 print_success "Virtual environment creation works"
 run_privileged rm -rf /tmp/python_test_env >/dev/null 2>&1
 
-print_status "--------------------------------------------"
 print_success "Python $LATEST_VERSION environment installed and verified"
-print_status "--------------------------------------------"
 
 exit 0
