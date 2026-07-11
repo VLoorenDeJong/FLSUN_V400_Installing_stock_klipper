@@ -28,7 +28,8 @@ LATEST_PY=""
 AVAILABLE_PYTHON_VERSIONS=()
 
 for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-    if apt-cache policy "$pkg" | grep -q "Candidate:"; then
+    if apt-cache policy "$pkg" | grep -q "Candidate: [0-9]"; then
+
         AVAILABLE_PYTHON_VERSIONS+=("$pkg")
     fi
 done
