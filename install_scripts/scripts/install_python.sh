@@ -1,85 +1,116 @@
 #!/bin/bash
+set -e
+
 # ============================================
-# Install / Repair Python 3.10 Environment
-# Speeder Pad – Ubuntu 22.04
+# Future‑Proof Python Installer (Auto‑Detect)
 # ============================================
 
-# Function to print status messages
+# Function to run commands with appropriate privileges
+run_privileged() {
+    if [ "$EUID" -eq 0 ]; then
+        "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+# Status message functions
 print_status() {
     printf "\033[34m🔧 %s\033[0m\n" "$1"
 }
 
-# Function to print success messages
 print_success() {
     printf "\033[32m✅ %s\033[0m\n" "$1"
 }
 
-# Function to print warnings
 print_warning() {
     printf "\033[33m⚠️ %s\033[0m\n" "$1"
 }
 
-# Function to print errors
 print_error() {
     printf "\033[31m❌ %s\033[0m\n" "$1"
 }
 
 print_status "--------------------------------------------"
-print_status "Checking Python environment"
+print_status "Detecting available Python versions"
 print_status "--------------------------------------------"
 
-# Detect current Python version
+# Detect latest Python 3.x available in apt
+LATEST_PY=$(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
+
+if [ -z "$LATEST_PY" ]; then
+    print_error "No Python 3.x versions found in apt repositories"
+    exit 1
+fi
+
+print_status "Latest Python detected: $LATEST_PY"
+
+# Extract version number (e.g., python3.12 → 3.12)
+LATEST_VERSION="${LATEST_PY#python}"
+
+# Detect current python3 version
 CURRENT_VERSION=$(python3 --version 2>/dev/null || echo "none")
 
-if [[ "$CURRENT_VERSION" == *"3.10"* ]]; then
-    print_success "Python 3.10 already installed — skipping full repair"
+if [[ "$CURRENT_VERSION" == *"$LATEST_VERSION"* ]]; then
+    print_success "Python $LATEST_VERSION already installed — skipping installation"
     exit 0
 fi
 
-print_warning "Python is not at version 3.10 (current: $CURRENT_VERSION)"
-print_status "Starting full Python repair..."
+print_warning "Python is not at latest version (current: $CURRENT_VERSION)"
+print_status "Preparing to install Python $LATEST_VERSION"
 
 print_status "--------------------------------------------"
-print_status "Removing old Python 3.9 packages"
+print_status "Removing old Python versions"
 print_status "--------------------------------------------"
 
-sudo apt purge -y python3.9 python3.9-minimal python3.9-venv python3.9-distutils python3.9-lib2to3 python3.9-dev >/dev/null 2>&1
-sudo rm -rf /usr/lib/python3.9 >/dev/null 2>&1
-sudo rm -rf /usr/local/lib/python3.9 >/dev/null 2>&1
-print_success "Python 3.9 removed (or was not present)"
+# Remove older Python versions (safe)
+run_privileged apt purge -y python3.[0-9] python3.[0-9]-minimal python3.[0-9]-venv python3.[0-9]-distutils >/dev/null 2>&1 || true
 
-print_status "Repairing dpkg state (if Python 3.9 left broken entries)..."
-sudo dpkg --remove --force-remove-reinstreq python3.9 python3.9-minimal python3.9-dev python3.9-venv >/dev/null 2>&1 || true
-sudo apt --fix-broken install -y >/dev/null 2>&1 || true
-sudo dpkg --configure -a >/dev/null 2>&1 || true
+run_privileged rm -rf /usr/lib/python3.[0-9] >/dev/null 2>&1 || true
+run_privileged rm -rf /usr/local/lib/python3.[0-9] >/dev/null 2>&1 || true
+
+print_success "Old Python versions removed"
+
+print_status "Repairing dpkg state..."
+run_privileged dpkg --remove --force-remove-reinstreq python3.[0-9] >/dev/null 2>&1 || true
+run_privileged apt --fix-broken install -y >/dev/null 2>&1 || true
+run_privileged dpkg --configure -a >/dev/null 2>&1 || true
 print_success "dpkg state repaired"
 
 print_status "Updating package lists..."
-sudo apt update -y >/dev/null 2>&1
+run_privileged apt-get update -qq >/dev/null 2>&1
 print_success "Package lists updated"
 
-print_status "Installing Python 3.10 packages..."
-sudo apt install -y python3 python3.10 python3.10-venv python3.10-distutils python3.10-full python3-pip python3-apt python3-distutils >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    print_error "Failed to install Python 3.10 packages"
-    exit 1
-fi
-print_success "Python 3.10 installed"
+print_status "Installing Python $LATEST_VERSION packages..."
+
+run_privileged apt-get install -y -qq \
+    python3 \
+    "$LATEST_PY" \
+    "$LATEST_PY-venv" \
+    "$LATEST_PY-distutils" \
+    python3-pip \
+    python3-apt \
+    python3-distutils \
+    >/dev/null 2>&1
+
+print_success "Python $LATEST_VERSION installed"
 
 print_status "Repairing python3 symlink..."
-sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.10 1 >/dev/null 2>&1
-sudo update-alternatives --set python3 /usr/bin/python3.10 >/dev/null 2>&1
-print_success "python3 symlink repaired"
+run_privileged update-alternatives --install /usr/bin/python3 python3 "/usr/bin/$LATEST_PY" 1 >/dev/null 2>&1
+run_privileged update-alternatives --set python3 "/usr/bin/$LATEST_PY" >/dev/null 2>&1
+print_success "python3 symlink updated"
 
-PYVER=$(python3 --version 2>/dev/null)
-if [[ "$PYVER" != *"3.10"* ]]; then
-    print_error "python3 is not pointing to Python 3.10 (current: $PYVER)"
+# Verify python3 version
+FINAL_VERSION=$(python3 --version 2>/dev/null)
+if [[ "$FINAL_VERSION" != *"$LATEST_VERSION"* ]]; then
+    print_error "python3 is not pointing to Python $LATEST_VERSION (current: $FINAL_VERSION)"
     exit 1
 fi
-print_success "python3 now points to Python 3.10 ($PYVER)"
+
+print_success "python3 now points to Python $LATEST_VERSION ($FINAL_VERSION)"
 
 print_status "Testing virtual environment creation..."
-sudo rm -rf /tmp/python_test_env >/dev/null 2>&1
+run_privileged rm -rf /tmp/python_test_env >/dev/null 2>&1
 python3 -m venv /tmp/python_test_env >/dev/null 2>&1
 
 if [ ! -f "/tmp/python_test_env/bin/activate" ]; then
@@ -88,10 +119,10 @@ if [ ! -f "/tmp/python_test_env/bin/activate" ]; then
 fi
 
 print_success "Virtual environment creation works"
-sudo rm -rf /tmp/python_test_env >/dev/null 2>&1
+run_privileged rm -rf /tmp/python_test_env >/dev/null 2>&1
 
 print_status "--------------------------------------------"
-print_success "Python 3.10 environment installed and verified"
+print_success "Python $LATEST_VERSION environment installed and verified"
 print_status "--------------------------------------------"
 
 exit 0
