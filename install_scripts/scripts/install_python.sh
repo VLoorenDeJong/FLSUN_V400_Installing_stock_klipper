@@ -35,18 +35,24 @@ print_status "--------------------------------------------"
 print_status "Detecting available Python versions"
 print_status "--------------------------------------------"
 
-# Detect latest Python 3.x available in apt
-LATEST_PY=$(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
+# Detect installable Python versions
+AVAILABLE_PYTHON_VERSIONS=()
 
-if [ -z "$LATEST_PY" ]; then
-    print_error "No Python 3.x versions found in apt repositories"
+for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
+    if apt-cache policy "$pkg" | grep -q "Candidate:"; then
+        AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+    fi
+done
+
+if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
+    print_error "No installable Python 3.x versions found"
     exit 1
 fi
 
-print_status "Latest Python detected: $LATEST_PY"
-
-# Extract version number (e.g., python3.12 → 3.12)
+LATEST_PY="${AVAILABLE_PYTHON_VERSIONS[-1]}"
 LATEST_VERSION="${LATEST_PY#python}"
+
+print_status "Latest installable Python detected: $LATEST_VERSION"
 
 # Detect current python3 version
 CURRENT_VERSION=$(python3 --version 2>/dev/null || echo "none")
