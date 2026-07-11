@@ -33,15 +33,20 @@ LATEST_PY=""
 AVAILABLE_PYTHON_VERSIONS=()
 
 detect_versions() {
+    print_status "Checking installability of Python versions"
+
     for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
-        # Only accept versions that apt can install AND dpkg can configure
-        if apt-get install -s "$pkg" >/dev/null 2>&1 &&
-           apt-get download -qq "$pkg" 2>/dev/null &&
-           dpkg-deb --contents "$pkg"*.deb 2>/dev/null | grep -q "/usr/bin/python3"; then
+        printf "   → Testing %-12s " "$pkg"
+
+        if apt-get install -s "$pkg" >/dev/null 2>&1; then
+            printf "✔ installable\n"
             AVAILABLE_PYTHON_VERSIONS+=("$pkg")
+        else
+            printf "❌ not installable\n"
         fi
     done
 }
+
 
 detect_versions 
 printf "\n"
