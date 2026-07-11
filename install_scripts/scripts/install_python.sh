@@ -41,7 +41,7 @@ detect_versions() {
     done
 }
 
-detect_versions &
+detect_versions 
 printf "\n"
 
 if [ ${#AVAILABLE_PYTHON_VERSIONS[@]} -eq 0 ]; then
