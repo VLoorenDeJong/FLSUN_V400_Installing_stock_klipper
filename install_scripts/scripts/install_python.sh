@@ -38,20 +38,25 @@ detect_versions() {
     for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
         printf "   → Testing %-12s " "$pkg"
 
+        # Step 1: apt simulation
         if apt-get install -s "$pkg" >/dev/null 2>&1; then
-            # Check if the binary exists in the .deb
+
+            # Step 2: download the .deb and check if it contains a real python binary
             DEB=$(apt-get download -qq "$pkg" 2>/dev/null)
-            if dpkg-deb --contents "$DEB" | grep -q "/usr/bin/python3"; then
-                printf "✔ installable\n"
+
+            if [ -n "$DEB" ] && dpkg-deb --contents "$DEB" | grep -q "/usr/bin/python3"; then
+                printf "✔ installable (binary present)\n"
                 AVAILABLE_PYTHON_VERSIONS+=("$pkg")
             else
-                printf "❌ no binary in package\n"
+                printf "❌ metadata only (no binary)\n"
             fi
+
         else
             printf "❌ not installable\n"
         fi
     done
 }
+
 
 detect_versions 
 printf "\n"
