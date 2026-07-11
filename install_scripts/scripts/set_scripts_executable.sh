@@ -57,24 +57,20 @@ else
 fi
 
 # FIXED: maintenance scripts also relative to repo
-MAINTENANCE_SCRIPTS_DIR="$BACKUP_CONFIG_DIR/maintenance_scripts"
-MAINTENANCE_SCRIPTS_SUBDIR="$MAINTENANCE_SCRIPTS_DIR/scripts"
+BACKUP_DIR="$REPO_DIR/backup_config"
+MAINTENANCE_SCRIPTS_DIR="$BACKUP_DIR/maintenance_scripts/scripts"
 
-if [[ ! -d "$MAINTENANCE_SCRIPTS_SUBDIR" ]]; then
-    echo -e "\e[33m⚠️  Scripts directory $MAINTENANCE_SCRIPTS_SUBDIR not found. Creating it...\e[0m"
-    mkdir -p "$MAINTENANCE_SCRIPTS_SUBDIR"
+if [[ ! -d "$MAINTENANCE_SCRIPTS_DIR" ]]; then
+    echo -e "\e[33m⚠️  Scripts directory $MAINTENANCE_SCRIPTS_DIR not found. Creating it...\e[0m"
+    mkdir -p "$MAINTENANCE_SCRIPTS_DIR"
 fi
 
-if [[ -d "$MAINTENANCE_SCRIPTS_DIR" ]]; then
-    sudo chmod -R +x "$MAINTENANCE_SCRIPTS_DIR"
-    if [[ $? -eq 0 ]]; then
-        echo -e "\e[32m✅ All scripts in $MAINTENANCE_SCRIPTS_DIR and subfolders are now executable!\e[0m"
-    else
-        echo -e "\e[31m❌ Failed to set executable permissions for $MAINTENANCE_SCRIPTS_DIR!\e[0m"
-        exit 1
-    fi
+sudo chmod -R +x "$MAINTENANCE_SCRIPTS_DIR"
+if [[ $? -eq 0 ]]; then
+    echo -e "\e[32m✅ All scripts in $MAINTENANCE_SCRIPTS_DIR are now executable!\e[0m"
 else
-    echo -e "\e[33m⚠️  Warning: $MAINTENANCE_SCRIPTS_DIR not found (may not be created yet)\e[0m"
+    echo -e "\e[31m❌ Failed to set executable permissions for $MAINTENANCE_SCRIPTS_DIR!\e[0m"
+    exit 1
 fi
 
 echo -e "\e[32m🎉 Script executable permissions setup complete!\e[0m"
