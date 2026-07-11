@@ -79,6 +79,7 @@ PHASE1_SCRIPTS=(
 
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
+    "set_scripts_executable.sh"
     "cleanup_repositories.sh"
     "install_python.sh"                   # ensure python3.9 + venv tooling before pip/setuptools fixes
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
