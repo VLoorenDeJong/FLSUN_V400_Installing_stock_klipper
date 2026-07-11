@@ -5,7 +5,6 @@ set -e
 # Future‑Proof Python Installer (Auto‑Detect)
 # ============================================
 
-# Function to run commands with appropriate privileges
 run_privileged() {
     if [ "$EUID" -eq 0 ]; then
         "$@"
@@ -14,28 +13,18 @@ run_privileged() {
     fi
 }
 
-# Status message functions
-print_status() {
-    printf "\033[34m🔧 %s\033[0m\n" "$1"
-}
-
-print_success() {
-    printf "\033[32m✅ %s\033[0m\n" "$1"
-}
-
-print_warning() {
-    printf "\033[33m⚠️ %s\033[0m\n" "$1"
-}
-
-print_error() {
-    printf "\033[31m❌ %s\033[0m\n" "$1"
-}
+print_status() { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
+print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
 print_status "--------------------------------------------"
 print_status "Detecting available Python versions"
 print_status "--------------------------------------------"
 
-# Detect installable Python versions
+# MINIMAL FIX: reset old value
+LATEST_PY=""
+
 AVAILABLE_PYTHON_VERSIONS=()
 
 for pkg in $(apt-cache pkgnames | grep -E '^python3\.[0-9]+$' | sort -V); do
@@ -54,7 +43,6 @@ LATEST_VERSION="${LATEST_PY#python}"
 
 print_status "Latest installable Python detected: $LATEST_VERSION"
 
-# Detect current python3 version
 CURRENT_VERSION=$(python3 --version 2>/dev/null || echo "none")
 
 if [[ "$CURRENT_VERSION" == *"$LATEST_VERSION"* ]]; then
@@ -69,8 +57,10 @@ print_status "--------------------------------------------"
 print_status "Removing old Python versions"
 print_status "--------------------------------------------"
 
-# Remove older Python versions (safe)
-run_privileged apt purge -y python3.[0-9] python3.[0-9]-minimal python3.[0-9]-venv python3.[0-9]-distutils >/dev/null 2>&1 || true
+# MINIMAL FIX: purge only installable versions
+for ver in "${AVAILABLE_PYTHON_VERSIONS[@]}"; do
+    run_privileged apt purge -y "$ver" "$ver-venv" "$ver-distutils" >/dev/null 2>&1 || true
+done
 
 run_privileged rm -rf /usr/lib/python3.[0-9] >/dev/null 2>&1 || true
 run_privileged rm -rf /usr/local/lib/python3.[0-9] >/dev/null 2>&1 || true
@@ -106,7 +96,6 @@ run_privileged update-alternatives --install /usr/bin/python3 python3 "/usr/bin/
 run_privileged update-alternatives --set python3 "/usr/bin/$LATEST_PY" >/dev/null 2>&1
 print_success "python3 symlink updated"
 
-# Verify python3 version
 FINAL_VERSION=$(python3 --version 2>/dev/null)
 if [[ "$FINAL_VERSION" != *"$LATEST_VERSION"* ]]; then
     print_error "python3 is not pointing to Python $LATEST_VERSION (current: $FINAL_VERSION)"
