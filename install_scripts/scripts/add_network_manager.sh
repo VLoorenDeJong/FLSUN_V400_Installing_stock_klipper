@@ -188,6 +188,14 @@ else
     print_success "NetworkManager/nmcli already installed."
 fi
 
+# Capture the CURRENT working network state BEFORE anything below touches the
+# network (the DNS-refresh section does nmcli down/up and can drop the default
+# route). The rollback uses the service flags; the gateway is informational.
+NET_HAD_NETWORKD=0; systemctl is-active --quiet systemd-networkd && NET_HAD_NETWORKD=1
+NET_HAD_WPA=0;      systemctl is-active --quiet wpa_supplicant   && NET_HAD_WPA=1
+NET_GATEWAY="$(ip route show default 2>/dev/null | awk '/default/{print $3; exit}')"
+print_status "Captured current network state (networkd=$NET_HAD_NETWORKD wpa=$NET_HAD_WPA gw=${NET_GATEWAY:-none})"
+
 print_header "Flushing DNS and requesting fresh DNS from router"
 
 print_status "Detecting active WiFi connection profile"
@@ -213,12 +221,6 @@ print_success "DNS refreshed from router"
 #    is configured below. The actual switch-over happens at the very END of this
 #    script, in a detached block that verifies connectivity and rolls back if it
 #    fails, so this script can never strand the box.
-#    Capture what's running now (so the rollback knows what to restore) and the
-#    gateway (for the post-handover health check).
-NET_HAD_NETWORKD=0; systemctl is-active --quiet systemd-networkd && NET_HAD_NETWORKD=1
-NET_HAD_WPA=0;      systemctl is-active --quiet wpa_supplicant   && NET_HAD_WPA=1
-NET_GATEWAY="$(ip route show default 2>/dev/null | awk '/default/{print $3; exit}')"
-print_status "Captured current network state (networkd=$NET_HAD_NETWORKD wpa=$NET_HAD_WPA gw=${NET_GATEWAY:-none})"
 
 print_status "Disabling autostart of competing network managers (leaving them RUNNING for now)"
 for unit in systemd-networkd systemd-networkd-wait-online networkd-dispatcher systemd-networkd.socket dhcpcd; do
@@ -411,6 +413,16 @@ echo "[handover \$(date -Is)] start (gw=${NET_GATEWAY:-none} ssid=${SSID:-none})
 systemctl stop wpa_supplicant systemd-networkd systemd-networkd.socket \\
     systemd-networkd-wait-online networkd-dispatcher dhcpcd 2>/dev/null || true
 
+# Kill any standalone wpa_supplicant processes NOT owned by NetworkManager.
+# (From the original script: interface-bound wpa_supplicant instances hold wlan0
+# and block NM from associating on this hardware. NM's own D-Bus instance is spared.)
+for pid in \$(pgrep -f wpa_supplicant 2>/dev/null); do
+    if ! ps -p "\$pid" -o cmd= 2>/dev/null | grep -q NetworkManager; then
+        kill "\$pid" 2>/dev/null || true
+    fi
+done
+sleep 2
+
 # Make sure NetworkManager owns wlan0 and the profile is up.
 systemctl restart NetworkManager
 nmcli networking on 2>/dev/null || true
@@ -419,12 +431,17 @@ nmcli device set wlan0 managed yes 2>/dev/null || true
 nmcli connection up "${SSID}" 2>/dev/null || nmcli device connect wlan0 2>/dev/null || true
 systemctl restart systemd-resolved 2>/dev/null || true
 
-# Verify real connectivity (retry ~40s) before trusting the switch.
+# Success criterion: wlan0 reaches NetworkManager state "connected" (= associated
+# AND holding an IP, i.e. reachable on the LAN for SSH). Deliberately NOT an
+# internet/gateway ping: this box ran fine WITHOUT a default route before the
+# switch (captured gw=none), so demanding internet would fail a healthy handover.
 ok=0
 for i in \$(seq 1 20); do
-    if ping -c1 -W2 "${NET_GATEWAY:-8.8.8.8}" >/dev/null 2>&1; then ok=1; break; fi
+    if nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep -q "^wlan0:connected"; then ok=1; break; fi
     sleep 2
 done
+echo "[handover] wlan0 state: \$(nmcli -t -f DEVICE,STATE device status 2>/dev/null | grep '^wlan0' || echo unknown)"
+echo "[handover] default route now: \$(ip route show default 2>/dev/null || echo none)"
 
 if [ "\$ok" = 1 ]; then
     echo "[handover] SUCCESS — NetworkManager is carrying the connection."

@@ -39,6 +39,33 @@ print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
+# Like show_progress, but for commands that must NEVER be killed (a half-done
+# release upgrade can leave the OS unbootable): no timeout, watch-only. Surfaces
+# the newest line of a log file as progress, dots while it's quiet.
+# Usage: run_with_log_progress "command" "/path/to/log" [poll_seconds]
+run_with_log_progress() {
+    local command="$1"
+    local log_file="$2"
+    local poll="${3:-10}"
+    eval "$command" &
+    local cmd_pid=$!
+    local last_line="" cur_line
+    while kill -0 "$cmd_pid" 2>/dev/null; do
+        sleep "$poll"
+        cur_line="$(sudo tail -n 1 "$log_file" 2>/dev/null || true)"
+        if [ -n "$cur_line" ] && [ "$cur_line" != "$last_line" ]; then
+            printf '\n\033[34m⏳ %.120s\033[0m' "$cur_line"
+            last_line="$cur_line"
+        else
+            printf "."
+        fi
+    done
+    printf "\n"
+    local exit_code=0
+    wait "$cmd_pid" || exit_code=$?
+    return $exit_code
+}
+
 # --- Helper: detect whether to show reboot messages ---
 # Return 0 (true) when script is run standalone (not called from start_install.sh).
 # Return 1 (false) when an ancestor process command line contains "start_install.sh".
@@ -87,8 +114,8 @@ if [ "$DISTRO_ID" != "Ubuntu" ]; then
 fi
 
 if ! command -v do-release-upgrade &>/dev/null; then
-    print_status "Installing upgrade tool..."
-    sudo apt-get install -y -qq ubuntu-release-upgrader-core >/dev/null 2>&1
+    show_progress "🔧 Installing upgrade tool (ubuntu-release-upgrader-core)" \
+        "sudo apt-get install -y -qq ubuntu-release-upgrader-core >/dev/null 2>&1" 3 600
 fi
 
 # --- Confirm ---
@@ -204,10 +231,13 @@ print_status "Conffile prompts will be auto-answered (install maintainer's versi
 # --- Step 1: Fully update current system first ---
 print_header "Step 1 of 3 — Update current system"
 show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"
-show_progress "⬆️  Applying all current updates" \
-    "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1"
-show_progress "🧹 Cleaning up" \
-    "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1"
+# dist-upgrade and autoremove are dpkg TRANSACTIONS — killing them mid-flight
+# corrupts package state, so no show_progress timeout here. Watch-only progress
+# from dpkg's own log (one line per package action) instead.
+print_status "⬆️  Applying all current updates (per-package progress below)"
+run_with_log_progress "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1" "/var/log/dpkg.log" 5
+print_status "🧹 Cleaning up"
+run_with_log_progress "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1" "/var/log/dpkg.log" 5
 print_success "Current system fully updated."
 
 # --- Step 2: Configure upgrade channel ---
@@ -220,7 +250,11 @@ fi
 print_success "Upgrade channel set to: $UPGRADE_CHANNEL"
 
 print_status "Checking if a new release is available..."
-CHECK_OUTPUT=$(sudo do-release-upgrade -c 2>&1 || true)
+RELCHECK_OUT="$(mktemp)"
+show_progress "🔍 Querying Ubuntu release servers" \
+    "sudo do-release-upgrade -c > '$RELCHECK_OUT' 2>&1" 3 300 || true
+CHECK_OUTPUT="$(cat "$RELCHECK_OUT" 2>/dev/null || true)"
+rm -f "$RELCHECK_OUT"
 if printf '%s' "$CHECK_OUTPUT" | grep -qi "No new release found"; then
     print_success "No new release available for channel: $UPGRADE_CHANNEL"
     exit 0
@@ -232,11 +266,16 @@ print_status "Running do-release-upgrade. This will take a while..."
 print_warning "If prompted during upgrade, press Enter to accept defaults."
 printf "\n"
 
-# Run the upgrade and capture exit code
-if sudo do-release-upgrade -f DistUpgradeViewNonInteractive; then
+# Run the upgrade with a live progress feed. The NonInteractive frontend prints
+# almost nothing to the terminal — real progress goes to /var/log/dist-upgrade/.
+UPG_RC=0
+run_with_log_progress "sudo do-release-upgrade -f DistUpgradeViewNonInteractive" \
+    "/var/log/dist-upgrade/main.log" 10 || UPG_RC=$?
+
+if [ "$UPG_RC" -eq 0 ]; then
     print_success "Upgrade command completed successfully."
 else
-    print_error "do-release-upgrade exited with an error. Check logs in /var/log/dist-upgrade/ for details."
+    print_error "do-release-upgrade exited with an error (code $UPG_RC). Check logs in /var/log/dist-upgrade/ for details."
     # Even on failure, continue to check for reboot-required file to reflect system state
 fi
 
