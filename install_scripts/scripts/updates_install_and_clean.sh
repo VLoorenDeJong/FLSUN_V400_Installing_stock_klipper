@@ -3,6 +3,10 @@
 # Suppress confirmation prompts for apt
 export DEBIAN_FRONTEND=noninteractive
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
 # Inline show_progress function (always used)
 show_progress() {
@@ -39,18 +43,18 @@ check_and_fix_dpkg_lock() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local fix_script="$script_dir/fix_dpkg_lock.sh"
-    
+
     if [ -f "$fix_script" ]; then
-        echo -e "\e[34m🔧 Checking and fixing DPKG locks...\e[0m"
+        print_status "Checking and fixing DPKG locks..."
         if bash "$fix_script"; then
-            echo -e "\e[32m✅ DPKG lock check/fix completed\e[0m"
+            print_success "DPKG lock check/fix completed"
             return 0
         else
-            echo -e "\e[31m❌ DPKG lock fix failed, continuing anyway...\e[0m"
+            print_error "DPKG lock fix failed, continuing anyway..."
             return 1
         fi
     else
-        echo -e "\e[33m⚠️  fix_dpkg_lock.sh not found, proceeding without DPKG lock check\e[0m"
+        print_warning "fix_dpkg_lock.sh not found, proceeding without DPKG lock check"
         return 1
     fi
 }
@@ -73,18 +77,18 @@ ask_user() {
 if ask_user "Do you want to update and upgrade the system?"; then
     # Check and fix any DPKG locks before proceeding with package operations
     check_and_fix_dpkg_lock
-    
-    if show_progress "� Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"; then
-        echo -e "\e[32m✅ Package lists updated successfully\e[0m"
-        
+
+    if show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"; then
+        print_success "Package lists updated successfully"
+
         if show_progress "⬆️ Upgrading system packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" -qq >/dev/null 2>&1"; then
-            echo -e "\e[32m✅ System upgrade completed successfully\e[0m"
+            print_success "System upgrade completed successfully"
         else
-            echo -e "\e[31m❌ System upgrade failed\e[0m"
+            print_error "System upgrade failed"
             exit 1
         fi
     else
-        echo -e "\e[31m❌ Package list update failed\e[0m"
+        print_error "Package list update failed"
         exit 1
     fi
 
@@ -92,22 +96,22 @@ if ask_user "Do you want to update and upgrade the system?"; then
     if ask_user "Do you want to clean up unused packages?"; then
         # Remove unused packages
         if show_progress "🗑️ Removing unused packages" "sudo apt-get autoremove -y -qq >/dev/null 2>&1"; then
-            echo -e "\e[32m✅ Unused packages removed\e[0m"
+            print_success "Unused packages removed"
         fi
 
         # Purge leftover configuration files, only if any exist
         leftover_configs=$(dpkg -l | awk '/^rc/ { print $2 }')
         if [ -n "$leftover_configs" ]; then
             if show_progress "🧹 Removing leftover configurations" "sudo apt-get purge -y -qq $leftover_configs >/dev/null 2>&1"; then
-                echo -e "\e[32m✅ Leftover configurations removed\e[0m"
+                print_success "Leftover configurations removed"
             fi
         fi
 
         # Clean up cached packages
         if show_progress "🧽 Cleaning package cache" "sudo apt-get autoclean -y -qq >/dev/null 2>&1 && sudo apt-get clean -y -qq >/dev/null 2>&1"; then
-            echo -e "\e[32m✅ Package cache cleaned\e[0m"
+            print_success "Package cache cleaned"
         fi
 
-        echo -e "\e[32m✅ System cleanup completed!\e[0m"
+        print_success "System cleanup completed!"
     fi
 fi

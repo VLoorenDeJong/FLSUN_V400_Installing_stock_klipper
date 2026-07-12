@@ -122,7 +122,7 @@ wait_for_dpkg_unlock() {
         if [ -n "$lock_pid" ]; then
             local process_name
             process_name=$(ps -p "$lock_pid" -o comm= 2>/dev/null)
-            echo -e "\e[34m🔄 Package system is locked by $process_name (PID: $lock_pid)\e[0m"
+            print_status "Package system is locked by $process_name (PID: $lock_pid)"
         fi
     else
         return 0
@@ -133,7 +133,7 @@ wait_for_dpkg_unlock() {
             sleep $check_interval
             waited=$((waited + check_interval))
             if [ $((waited % 30)) -eq 0 ]; then
-                echo -e "\e[34m⏳ Still waiting for package system... (${waited}s/${max_wait}s)\e[0m"
+                print_status "Still waiting for package system... (${waited}s/${max_wait}s)"
             fi
             continue
         fi
@@ -142,7 +142,7 @@ wait_for_dpkg_unlock() {
         return 0
     done
 
-    echo -e "\e[33m⚠️ Timeout waiting for package system, attempting to fix...\e[0m"
+    print_warning "Timeout waiting for package system, attempting to fix..."
 
     if pgrep -f "unattended-upgrade" >/dev/null 2>&1; then
         sudo pkill -9 -f "unattended-upgrade"

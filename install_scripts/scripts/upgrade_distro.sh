@@ -40,10 +40,10 @@ print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
 # --- Helper: detect whether to show reboot messages ---
-# Return 0 (true) when script is run standalone (not called from start_sinstall.sh).
-# Return 1 (false) when an ancestor process command line contains "start_sinstall.sh".
+# Return 0 (true) when script is run standalone (not called from start_install.sh).
+# Return 1 (false) when an ancestor process command line contains "start_install.sh".
 should_show_reboot_messages() {
-    # Walk up the parent chain and look for start_sinstall.sh in any ancestor cmdline.
+    # Walk up the parent chain and look for start_install.sh in any ancestor cmdline.
     local pid parent_cmdline
     pid=$$
     while [ "$pid" -gt 1 ]; do
@@ -159,7 +159,7 @@ if [ -f /var/run/reboot-required ]; then
         print_warning "Reboot is required to finish applying some changes."
         print_status "No reboot was performed by this script. Reboot when ready."
     else
-        # When called from another script (e.g., start_sinstall.sh), do not print the reboot messages.
+        # When called from another script (e.g., start_install.sh), do not print the reboot messages.
         # Instead, write a concise state file for the caller to inspect.
         printf "reboot-required\n" > /var/run/sinstall_state 2>/dev/null || true
     fi

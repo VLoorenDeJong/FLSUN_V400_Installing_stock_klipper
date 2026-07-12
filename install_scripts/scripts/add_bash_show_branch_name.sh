@@ -15,8 +15,8 @@ else
     ACTUAL_HOME="$HOME"
 fi
 
-echo -e "\e[34m🔧 Setting up Git branch display for user: $ACTUAL_USER\e[0m"
-echo -e "\e[34mℹ️  User home directory: $ACTUAL_HOME\e[0m"
+print_status "Setting up Git branch display for user: $ACTUAL_USER"
+print_status "User home directory: $ACTUAL_HOME"
 
 # Function: Get Git branch
 get_git_branch() {
@@ -73,56 +73,56 @@ if [ -f "$USER_BASHRC" ]; then
        grep -q "get_git_branch()" "$USER_BASHRC" 2>/dev/null; then
         HAS_GIT_PROMPT=true
     fi
-fi 
+fi
 
 if [ "$HAS_GIT_PROMPT" = false ]; then
-    echo -e "\e[34m📁 Adding Git branch prompt to $USER_BASHRC\e[0m"
+    print_status "Adding Git branch prompt to $USER_BASHRC"
     echo "# --- Git branch in prompt ---" >> "$USER_BASHRC"
     echo "$PROMPT_BRANCH_FUNC" >> "$USER_BASHRC"
-    
+
     # Set proper ownership for the bashrc file
     chown "$ACTUAL_USER:$(id -gn "$ACTUAL_USER")" "$USER_BASHRC" 2>/dev/null || true
-    
-    echo -e "\e[32m✅ Git branch prompt added to user's bashrc.\e[0m"
+
+    print_success "Git branch prompt added to user's bashrc."
 else
-    echo -e "\e[33m⚠️ Git branch prompt already exists in user's bashrc.\e[0m"
-    
+    print_warning "Git branch prompt already exists in user's bashrc."
+
     # Check if the existing prompt has the display issue and fix it
     if grep -q "PS1=.*\[\\\e\[1;32m\].*\[\\\e\[0m\].*\[\\\e\[1;34m\].*\[\\\e\[0m\].*branch_display.*\[\\\e\[0m\]" "$USER_BASHRC" 2>/dev/null; then
-        echo -e "\e[33m🔧 Detected broken prompt formatting, fixing...\e[0m"
-        
+        print_status "Detected broken prompt formatting, fixing..."
+
         # Create a backup
         cp "$USER_BASHRC" "$USER_BASHRC.backup.$(date +%Y%m%d_%H%M%S)"
-        
+
         # Remove the old broken prompt section
         sed -i '/# --- Git branch in prompt ---/,/^if \[\[ -n "\$PS1" \]\]; then update_prompt; fi$/d' "$USER_BASHRC"
-        
+
         # Add the fixed version
         echo "# --- Git branch in prompt ---" >> "$USER_BASHRC"
         echo "$PROMPT_BRANCH_FUNC" >> "$USER_BASHRC"
-        
+
         # Set proper ownership
         chown "$ACTUAL_USER:$(id -gn "$ACTUAL_USER")" "$USER_BASHRC" 2>/dev/null || true
-        
-        echo -e "\e[32m✅ Fixed broken Git branch prompt formatting.\e[0m"
+
+        print_success "Fixed broken Git branch prompt formatting."
     else
-        echo -e "\e[32m✅ No changes needed - Git branch prompt is already configured.\e[0m"
+        print_success "No changes needed - Git branch prompt is already configured."
     fi
 fi
 
 # Test if we can source the bashrc (only if running interactively as the actual user and changes were made)
 if [[ -n "$PS1" ]] && [[ "$(whoami)" == "$ACTUAL_USER" ]] && [ "$HAS_GIT_PROMPT" = false ]; then
-    echo -e "\e[34m🔄 Sourcing bashrc for current session...\e[0m"
+    print_status "Sourcing bashrc for current session..."
     source "$USER_BASHRC"
 fi
 
 if [ "$HAS_GIT_PROMPT" = false ]; then
-    echo -e "\e[32m✅ Bash prompt will now show Git branch in new terminals for user: $ACTUAL_USER\e[0m"
-    echo -e "\e[33m💡 Open a new terminal or run 'source ~/.bashrc' to see the changes\e[0m"
-    echo -e "\e[33m💡 Navigate to a Git repository folder to see the branch name in the prompt\e[0m"
+    print_success "Bash prompt will now show Git branch in new terminals for user: $ACTUAL_USER"
+    print_warning "Open a new terminal or run 'source ~/.bashrc' to see the changes"
+    print_warning "Navigate to a Git repository folder to see the branch name in the prompt"
 else
-    echo -e "\e[32m✅ Git branch prompt is already configured for user: $ACTUAL_USER\e[0m"
-    echo -e "\e[33m💡 If you had display issues, they should now be fixed\e[0m"
-    echo -e "\e[33m💡 Run 'source ~/.bashrc' or open a new terminal to apply any fixes\e[0m"
-    echo -e "\e[33m💡 Navigate to a Git repository folder to see the branch name in the prompt\e[0m"
+    print_success "Git branch prompt is already configured for user: $ACTUAL_USER"
+    print_warning "If you had display issues, they should now be fixed"
+    print_warning "Run 'source ~/.bashrc' or open a new terminal to apply any fixes"
+    print_warning "Navigate to a Git repository folder to see the branch name in the prompt"
 fi

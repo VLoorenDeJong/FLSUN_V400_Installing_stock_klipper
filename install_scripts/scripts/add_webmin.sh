@@ -48,61 +48,61 @@ check_and_fix_dpkg_lock() {
     local fix_script="$script_dir/fix_dpkg_lock.sh"
     
     if [ -f "$fix_script" ]; then
-        echo -e "\e[34m🔧 Checking and fixing DPKG locks...\e[0m"
+        print_status "Checking and fixing DPKG locks..."
         if bash "$fix_script"; then
-            echo -e "\e[32m✅ DPKG lock check/fix completed\e[0m"
+            print_success "DPKG lock check/fix completed"
             return 0
         else
-            echo -e "\e[31m❌ DPKG lock fix failed, continuing anyway...\e[0m"
+            print_error "DPKG lock fix failed, continuing anyway..."
             return 1
         fi
     else
-        echo -e "\e[33m⚠️  fix_dpkg_lock.sh not found, proceeding without DPKG lock check\e[0m"
+        print_warning "fix_dpkg_lock.sh not found, proceeding without DPKG lock check"
         return 1
     fi
 }
 
 # Function to diagnose apt/dpkg system health
 diagnose_apt_system() {
-    echo -e "\e[34m🔍 Diagnosing apt/dpkg system health...\e[0m"
+    print_status "Diagnosing apt/dpkg system health..."
     
     local issues_found=0
     
     # Check network connectivity to Ubuntu repositories
-    echo -e "\e[34m🌐 Checking network connectivity...\e[0m"
+    print_status "Checking network connectivity..."
     if ! timeout 10 curl -s --head http://archive.ubuntu.com/ubuntu/dists/ >/dev/null 2>&1; then
-        echo -e "\e[33m⚠️  Cannot reach Ubuntu repositories - network issue\e[0m"
+        print_warning "Cannot reach Ubuntu repositories - network issue"
         ((issues_found++))
     fi
     
     # Check for corrupted dpkg status file
     if ! sudo dpkg --audit >/dev/null 2>&1; then
-        echo -e "\e[33m⚠️  dpkg audit failed - possible corruption\e[0m"
+        print_warning "dpkg audit failed - possible corruption"
         ((issues_found++))
     fi
     
     # Check package cache integrity
     if ! sudo apt-get check >/dev/null 2>&1; then
-        echo -e "\e[33m⚠️  apt-get check failed - dependency issues\e[0m"
+        print_warning "apt-get check failed - dependency issues"
         ((issues_found++))
     fi
     
     # Check for held packages
     local held_packages=$(sudo apt-mark showhold | wc -l)
     if [ "$held_packages" -gt 0 ]; then
-        echo -e "\e[33m⚠️  $held_packages packages are held\e[0m"
+        print_warning "$held_packages packages are held"
         ((issues_found++))
     fi
     
     # Check disk space
     local available_space=$(df /var/lib/dpkg | awk 'NR==2 {print $4}')
     if [ "$available_space" -lt 100000 ]; then  # Less than ~100MB
-        echo -e "\e[33m⚠️  Low disk space available: $(($available_space/1024))MB\e[0m"
+        print_warning "Low disk space available: $(($available_space/1024))MB"
         ((issues_found++))
     fi
     
     if [ $issues_found -gt 0 ]; then
-        echo -e "\e[33m⚠️  Found $issues_found potential issues. Attempting auto-fix...\e[0m"
+        print_warning "Found $issues_found potential issues. Attempting auto-fix..."
         
         # Try to fix common issues
         sudo apt-get clean >/dev/null 2>&1
@@ -110,9 +110,9 @@ diagnose_apt_system() {
         sudo apt-get autoremove -y >/dev/null 2>&1
         sudo dpkg --configure -a >/dev/null 2>&1
         
-        echo -e "\e[32m✅ Auto-fix completed\e[0m"
+        print_success "Auto-fix completed"
     else
-        echo -e "\e[32m✅ apt/dpkg system appears healthy\e[0m"
+        print_success "apt/dpkg system appears healthy"
     fi
 }
 
@@ -144,7 +144,7 @@ else
     else
         print_error "Failed to update package lists"
         # Show what went wrong
-        echo -e "\e[33m🔍 Debug info:\e[0m"
+        print_warning "Debug info:"
         timeout 30 sudo apt-get update --fix-missing 2>&1 | head -20
         exit 1
     fi
@@ -160,7 +160,7 @@ else
     else
         print_error "Failed to install dependencies"
         # Show what went wrong
-        echo -e "\e[33m🔍 Debug info:\e[0m"
+        print_warning "Debug info:"
         timeout 30 sudo apt-get install -y --no-install-recommends curl gnupg software-properties-common apt-transport-https ca-certificates 2>&1 | head -20
         exit 1
     fi

@@ -9,6 +9,12 @@ export DEBIAN_FRONTEND=noninteractive
 # Matches the exact style of updates_install_and_clean.sh
 # =============================================================================
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
+
 # --- Inline show_progress (copied exactly) ---
 show_progress() {
     local message="$1"
@@ -44,18 +50,18 @@ check_and_fix_dpkg_lock() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local fix_script="$script_dir/fix_dpkg_lock.sh"
-    
+
     if [ -f "$fix_script" ]; then
-        echo -e "\e[34m🔧 Checking and fixing DPKG locks...\e[0m"
+        print_status "Checking and fixing DPKG locks..."
         if bash "$fix_script"; then
-            echo -e "\e[32m✅ DPKG lock check/fix completed\e[0m"
+            print_success "DPKG lock check/fix completed"
             return 0
         else
-            echo -e "\e[31m❌ DPKG lock fix failed, continuing anyway...\e[0m"
+            print_error "DPKG lock fix failed, continuing anyway..."
             return 1
         fi
     else
-        echo -e "\e[33m⚠️  fix_dpkg_lock.sh not found, proceeding without DPKG lock check\e[0m"
+        print_warning "fix_dpkg_lock.sh not found, proceeding without DPKG lock check"
         return 1
     fi
 }
@@ -66,29 +72,29 @@ STATE_FILE="${STATE_DIR}/install_python_latest.done"
 FORCE_RUN="${FORCE_RUN_PYTHON:-0}"
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m❌ This script must run with sudo/root privileges.\e[0m"
+    print_error "This script must run with sudo/root privileges."
     exit 1
 fi
 
 if [ -f "$STATE_FILE" ] && [ "$FORCE_RUN" != "1" ]; then
-    echo -e "\e[33m⚠️  Python already installed previously. Skipping.\e[0m"
-    echo -e "\e[33m⚠️  To force rerun: FORCE_RUN_PYTHON=1 sudo bash $0\e[0m"
+    print_warning "Python already installed previously. Skipping."
+    print_warning "To force rerun: FORCE_RUN_PYTHON=1 sudo bash $0"
     exit 0
 fi
 
-echo -e "\n\e[36m=== Install latest supported Python 3.x + venv + distutils ===\e[0m"
+print_header "Install latest supported Python 3.x + venv + distutils"
 
 # --- Detect latest supported python3.X version ---
-echo -e "\e[34m🔧 Detecting latest supported python3.X version...\e[0m"
+print_status "Detecting latest supported python3.X version..."
 
 LATEST=$(apt-cache pkgnames python3. | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
 
 if [ -z "$LATEST" ]; then
-    echo -e "\e[31m❌ No supported python3.X version found in apt repositories.\e[0m"
+    print_error "No supported python3.X version found in apt repositories."
     exit 1
 fi
 
-echo -e "\e[32m✅ Detected Python package: $LATEST\e[0m"
+print_success "Detected Python package: $LATEST"
 
 # --- Install python3.X + venv + distutils ---
 show_progress "🔧 Installing $LATEST ${LATEST}-venv ${LATEST}-distutils" \
@@ -97,7 +103,7 @@ show_progress "🔧 Installing $LATEST ${LATEST}-venv ${LATEST}-distutils" \
 # --- Verify installation ---
 PYBIN=$(command -v "${LATEST}")
 INSTALLED_VER=$($PYBIN --version 2>&1 || true)
-echo -e "\e[32m✅ Installed: $INSTALLED_VER\e[0m"
+print_success "Installed: $INSTALLED_VER"
 
 mkdir -p "$STATE_DIR"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$STATE_FILE"
@@ -115,9 +121,9 @@ show_progress "🔧 Upgrading pip, setuptools, wheel, virtualenv for $LATEST" \
 # --- Fix permissions ---
 SITEPKG=$($PYBIN -c "import site; print(site.getsitepackages()[0])")
 if [ -d "$SITEPKG" ]; then
-    echo -e "\e[34m🔧 Fixing permissions in $SITEPKG (if needed)...\e[0m"
+    print_status "Fixing permissions in $SITEPKG (if needed)..."
     chown -R root:root "$SITEPKG"
     chmod -R go-w "$SITEPKG"
 fi
 
-echo -e "\e[32m✅ Python environment ready.\e[0m"
+print_success "Python environment ready."

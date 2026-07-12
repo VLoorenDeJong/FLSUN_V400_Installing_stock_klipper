@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m❌ This script must run as root. Use: sudo bash $0\e[0m"
+    print_error "This script must run as root. Use: sudo bash $0"
     exit 1
 fi
 

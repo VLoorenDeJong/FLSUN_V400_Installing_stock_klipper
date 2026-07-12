@@ -19,10 +19,11 @@ set -e
 print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
 print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
 print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m❌ Please run as root (use sudo).\e[0m"
+    print_error "Please run as root (use sudo)."
     exit 1
 fi
 

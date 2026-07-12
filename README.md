@@ -77,7 +77,7 @@ This video provided general guidance and context for the installation workflow.
 
 ## AI Assistance
 
-This project was generated using AI tools (Copilot).  
+This project was generated using LLM tools.  
 My programming experience is in C#, so the Bash scripts and automation logic were produced by AI.
 
 <br/>
@@ -94,7 +94,7 @@ My programming experience is in C#, so the Bash scripts and automation logic wer
 
 # Disclaimer
 
-All code in this project is generated using AI tools (Copilot).
+All code in this project is generated using LLM tools.
 This installer modifies system-level components.  
 Use at your own risk.  
 I am not responsible for damage, data loss, or failed installations.
