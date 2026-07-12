@@ -23,15 +23,26 @@ if ! command -v timedatectl >/dev/null 2>&1; then
     exit 1
 fi
 
-# --- Determine timezone: CLI arg if given, otherwise prompt ---
+# --- Determine timezone: CLI arg if given, otherwise prompt (retry on typo) ---
 # NOTE: all interactive reads pull from /dev/tty, not stdin. start_install.sh
 # runs child scripts with stdin redirected and may have buffered input; reading
 # from stdin here lets a stray character get swallowed without blocking.
+valid_timezone() { timedatectl list-timezones 2>/dev/null | grep -Fxq "$1"; }
+
 if [ -n "${1:-}" ]; then
     TIMEZONE="$1"
+    if ! valid_timezone "$TIMEZONE"; then
+        print_error "Invalid timezone: $TIMEZONE"
+        print_warning "Example valid value: Europe/Amsterdam"
+        exit 1
+    fi
 else
-    read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT </dev/tty
-    TIMEZONE="${TZ_INPUT:-Europe/Amsterdam}"
+    while true; do
+        read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT </dev/tty
+        TIMEZONE="${TZ_INPUT:-Europe/Amsterdam}"
+        valid_timezone "$TIMEZONE" && break
+        print_warning "'$TIMEZONE' is not a valid timezone — the country question comes next, this one wants a zone like Europe/Amsterdam or America/New_York. Try again."
+    done
 fi
 
 # --- ISO-3166-1 alpha-2 country/territory table: "CODE:Name" ---
@@ -345,11 +356,8 @@ fi
 
 IW_BIN="$(command -v iw)"
 
-if ! timedatectl list-timezones | grep -Fxq "$TIMEZONE"; then
-    print_error "Invalid timezone: $TIMEZONE"
-    print_warning "Example valid value: Europe/Amsterdam"
-    exit 1
-fi
+# Timezone was already validated at the prompt above (retry loop) or, for the
+# CLI-arg path, checked and rejected there — no need to re-validate here.
 
 if ! printf '%s' "$COUNTRY_CODE" | grep -Eq '^[A-Z]{2}$'; then
     print_error "Country code must be 2 letters (ISO-3166-1 alpha-2), got: $COUNTRY_CODE"
