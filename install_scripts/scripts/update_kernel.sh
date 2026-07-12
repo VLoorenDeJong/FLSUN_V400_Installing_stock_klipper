@@ -49,8 +49,12 @@ print_status "Current kernel: $CURRENT_KERNEL"
 
 show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1" 3 600
 
+# --force-confnew auto-answers dpkg conffile prompts (e.g. the /etc/sudoers
+# "Y/I/N/O/D/Z" dialog) by installing the package maintainer's version — the
+# "Y/I" option — unattended. NOTE: confnew must NOT be paired with confdef, or
+# confdef's default action (keep current) would win instead.
 show_progress "⬆️  Installing latest kernel and security updates" \
-    "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1" 5 1800
+    "sudo apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq >/dev/null 2>&1" 5 1800
 
 show_progress "🧹 Removing old kernels" \
     "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1" 3 600

@@ -24,10 +24,13 @@ if ! command -v timedatectl >/dev/null 2>&1; then
 fi
 
 # --- Determine timezone: CLI arg if given, otherwise prompt ---
+# NOTE: all interactive reads pull from /dev/tty, not stdin. start_install.sh
+# runs child scripts with stdin redirected and may have buffered input; reading
+# from stdin here lets a stray character get swallowed without blocking.
 if [ -n "${1:-}" ]; then
     TIMEZONE="$1"
 else
-    read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT
+    read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT </dev/tty
     TIMEZONE="${TZ_INPUT:-Europe/Amsterdam}"
 fi
 
@@ -289,7 +292,7 @@ if [ -n "${2:-}" ]; then
     COUNTRY_CODE_RAW="$2"
 else
     while true; do
-        read -rp "Enter your country name or 2-letter code (e.g. 'germany', 'DE') [default: NL]: " CC_QUERY
+        read -rp "Enter your country name or 2-letter code (e.g. 'germany', 'DE') [default: NL]: " CC_QUERY </dev/tty
         CC_QUERY="${CC_QUERY:-NL}"
         CC_QUERY_UPPER="$(printf '%s' "$CC_QUERY" | tr '[:lower:]' '[:upper:]')"
 
@@ -318,7 +321,7 @@ else
         for i in "${!MATCHES[@]}"; do
             printf "  %2d) %s (%s)\n" "$((i+1))" "${MATCHES[$i]#*:}" "${MATCHES[$i]%%:*}"
         done
-        read -rp "Pick a number (or press Enter to search again): " PICK
+        read -rp "Pick a number (or press Enter to search again): " PICK </dev/tty
         if [[ "$PICK" =~ ^[0-9]+$ ]] && [ "$PICK" -ge 1 ] && [ "$PICK" -le "${#MATCHES[@]}" ]; then
             COUNTRY_CODE_RAW="${MATCHES[$((PICK-1))]%%:*}"
             break

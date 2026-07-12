@@ -84,38 +84,47 @@ fi
 
 print_header "Install latest supported Python 3.x + venv + distutils"
 
-# --- Detect latest supported python3.X version ---
-print_status "Detecting latest supported python3.X version..."
+# --- Use the distribution's DEFAULT python3, not the newest available ---
+# Grabbing "newest python3.X in apt" is wrong: a deadsnakes-style PPA or a newer
+# base image can expose e.g. python3.15, and Python 3.12+ dropped distutils
+# entirely — so `apt-get install python3.15-distutils` fails and aborts the whole
+# install. The distro default (the unversioned python3 metapackage) is the
+# version this OS ships and the Klipper stack supports (3.10 on Ubuntu 22.04),
+# needs no hardcoded version to maintain, and a PPA cannot hijack it.
+print_status "Ensuring the distribution default python3 + venv + dev tooling..."
 
-LATEST=$(apt-cache pkgnames python3. | grep -E '^python3\.[0-9]+$' | sort -V | tail -n 1)
+show_progress "🔧 Installing python3 + venv + dev" \
+"sudo apt-get install -y python3 python3-venv python3-dev -qq >/dev/null 2>&1"
 
-if [ -z "$LATEST" ]; then
-    print_error "No supported python3.X version found in apt repositories."
-    exit 1
+# distutils only where it still exists (removed from Python 3.12+); guard it so a
+# missing package can never abort the install.
+if apt-cache show python3-distutils >/dev/null 2>&1; then
+    show_progress "🔧 Installing python3-distutils" \
+    "sudo apt-get install -y python3-distutils -qq >/dev/null 2>&1"
+else
+    print_warning "python3-distutils not available on this release (Python 3.12+) — skipping."
 fi
 
-print_success "Detected Python package: $LATEST"
-
-# --- Install python3.X + venv + distutils ---
-show_progress "🔧 Installing $LATEST ${LATEST}-venv ${LATEST}-distutils" \
-"sudo apt-get install -y $LATEST ${LATEST}-venv ${LATEST}-distutils -qq >/dev/null 2>&1"
-
 # --- Verify installation ---
-PYBIN=$(command -v "${LATEST}")
+PYBIN="$(command -v python3)"
+if [ -z "$PYBIN" ]; then
+    print_error "python3 not found after install."
+    exit 1
+fi
 INSTALLED_VER=$($PYBIN --version 2>&1 || true)
-print_success "Installed: $INSTALLED_VER"
+print_success "Using distribution default: $INSTALLED_VER"
 
 mkdir -p "$STATE_DIR"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$STATE_FILE"
 
 # --- Ensure pip exists ---
 if ! $PYBIN -m pip --version >/dev/null 2>&1; then
-    show_progress "🔧 Installing pip for $LATEST" \
-    "curl -sSLo get-pip.py https://bootstrap.pypa.io/pip/${LATEST#python3.}/get-pip.py && $PYBIN get-pip.py && rm -f get-pip.py"
+    show_progress "🔧 Installing pip for $INSTALLED_VER" \
+    "curl -sSLo get-pip.py https://bootstrap.pypa.io/get-pip.py && $PYBIN get-pip.py && rm -f get-pip.py"
 fi
 
 # --- Upgrade pip, setuptools, wheel, virtualenv ---
-show_progress "🔧 Upgrading pip, setuptools, wheel, virtualenv for $LATEST" \
+show_progress "🔧 Upgrading pip, setuptools, wheel, virtualenv" \
 "$PYBIN -m pip install --upgrade pip setuptools wheel virtualenv"
 
 # --- Fix permissions ---

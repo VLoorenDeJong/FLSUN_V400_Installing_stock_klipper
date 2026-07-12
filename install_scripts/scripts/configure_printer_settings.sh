@@ -204,9 +204,14 @@ sudo chmod -R 775 "$ACTUAL_HOME/printer_data"
 
 print_success "Permissions repaired."
 
-print_status "Restarting Moonraker..."
+# Restart Klipper FIRST so it reloads printer.cfg with the MCU serial injected
+# above (restore_flsun_configs.sh restarts klipper earlier, but at that point the
+# serial is still Guilouz's placeholder — klipper only comes up clean once the
+# real serial is in place, which is here). Then restart Moonraker.
+print_status "Restarting Klipper and Moonraker..."
+sudo systemctl restart klipper
 sudo systemctl restart moonraker
-print_success "Moonraker restarted."
+print_success "Klipper and Moonraker restarted."
 
 print_success "KlipperScreen + MCU serial + Exclude Object configuration completed."
 # Fix permissions for .theme folder (custom CSS)

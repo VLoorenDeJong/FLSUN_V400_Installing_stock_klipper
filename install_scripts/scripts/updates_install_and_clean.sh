@@ -65,7 +65,7 @@ ASK_CONFIRMATION=false
 # Function to prompt the user if confirmation is enabled
 ask_user() {
     if [[ "$ASK_CONFIRMATION" == true ]]; then
-        read -r -p "$1 (Y/n): " choice
+        read -r -p "$1 (Y/n): " choice </dev/tty
         choice=${choice:-Y}  # Default to "Y" if no input is given
         [[ "$choice" =~ ^[Yy]$ ]]
     else
@@ -81,7 +81,7 @@ if ask_user "Do you want to update and upgrade the system?"; then
     if show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"; then
         print_success "Package lists updated successfully"
 
-        if show_progress "⬆️ Upgrading system packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::=\"--force-confdef\" -o Dpkg::Options::=\"--force-confold\" -qq >/dev/null 2>&1"; then
+        if show_progress "⬆️ Upgrading system packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq >/dev/null 2>&1"; then
             print_success "System upgrade completed successfully"
         else
             print_error "System upgrade failed"

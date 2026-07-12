@@ -133,7 +133,7 @@ for MANUF in "${!MANUFACTURERS[@]}"; do
 done
 
 echo "----------------------------------------"
-read -p "Enter your choice: " CHOICE
+read -p "Enter your choice: " CHOICE </dev/tty
 
 # Validate
 if ! [[ "$CHOICE" =~ ^[0-9]+$ ]]; then
@@ -157,7 +157,7 @@ fi
 # ------------------------------------------------------------
 echo ""
 echo "You selected: $SELECTED_MANUF $SELECTED_BOARD → $SELECTED_VARIANT"
-read -p "Are you sure? (Y/n/b): " CONFIRM
+read -p "Are you sure? (Y/n/b): " CONFIRM </dev/tty
 
 case "$CONFIRM" in
   ""|"Y"|"y")
@@ -194,9 +194,13 @@ sudo chown -R "$ACTUAL_USER:$ACTUAL_USER" "$CONFIG_ROOT"
 sudo chmod -R 775 "$CONFIG_ROOT"
 print_success "Permissions fixed."
 
-print_status "Restarting Klipper services..."
-sudo systemctl restart klipper
+# NOTE: Klipper is intentionally NOT restarted here. The printer.cfg just
+# restored still carries Guilouz's placeholder [mcu] serial; the real serial is
+# injected by configure_printer_settings.sh (the next step), which then restarts
+# both Klipper and Moonraker. Restarting klipper now would only push it into an
+# error state until that step. Restart just Moonraker so it re-reads the config set.
+print_status "Restarting Moonraker..."
 sudo systemctl restart moonraker
-print_success "Services restarted."
+print_success "Moonraker restarted."
 
 print_success "FLSUN configuration restore completed successfully!"

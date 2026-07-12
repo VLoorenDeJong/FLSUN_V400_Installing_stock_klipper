@@ -95,7 +95,7 @@ fi
 printf "Choose upgrade channel:\n"
 printf "  1) LTS releases only (safer)\n"
 printf "  2) Any normal release\n\n"
-read -rp "Enter 1 or 2 [default 1]: " CHANNEL_CHOICE
+read -rp "Enter 1 or 2 [default 1]: " CHANNEL_CHOICE </dev/tty
 case "${CHANNEL_CHOICE:-}" in
     2)
         UPGRADE_CHANNEL="normal"
@@ -108,11 +108,98 @@ esac
 print_warning "This will upgrade Ubuntu to the next available $UPGRADE_CHANNEL release."
 print_warning "The process can take a long time and usually requires reboot later."
 printf "\n"
-read -rp "Are you sure you want to continue? (yes/N): " CONFIRM
-if [ "${CONFIRM:-}" != "yes" ]; then
+read -rp "Are you sure you want to continue? (Y/n): " CONFIRM </dev/tty
+CONFIRM="${CONFIRM:-Y}"   # Enter defaults to Yes
+if [[ ! "$CONFIRM" =~ ^[Yy]([Ee][Ss])?$ ]]; then
     print_status "Upgrade cancelled."
     exit 0
 fi
+
+# --- Content-aware sudoers protection across the upgrade ---
+# We install the maintainer's version of conffiles (confnew below). If the printer
+# user's passwordless-sudo rule lives directly in /etc/sudoers (not in a
+# /etc/sudoers.d/ file), confnew can wipe it — and KIAUH in Phase 2 runs as that
+# user and calls sudo, so losing it would break Phase 2. Strategy: snapshot
+# sudoers now and remember the exact NOPASSWD rule(s) for the install user; if the
+# upgrade drops them, restore JUST those rules afterwards, via a validated
+# /etc/sudoers.d/ drop-in (never edit the main file, never install an invalid rule).
+INSTALL_USER="${SUDO_USER:-}"
+if [ -z "$INSTALL_USER" ] || [ "$INSTALL_USER" = "root" ]; then
+    id pi >/dev/null 2>&1 && INSTALL_USER="pi" || INSTALL_USER=""
+fi
+
+SUDOERS_BACKUP_DIR="/var/backups/flsun-sudoers-$(date +%Y%m%d_%H%M%S)"
+NOPASSWD_WAS_PRESENT=0
+NOPASSWD_RULES=""
+
+# Emit every NOPASSWD rule granting the install user passwordless sudo, across the
+# main file and sudoers.d.
+find_user_nopasswd_rules() {
+    [ -n "$INSTALL_USER" ] || return 0
+    grep -rhsE "^[[:space:]]*${INSTALL_USER}[[:space:]].*NOPASSWD" \
+        /etc/sudoers /etc/sudoers.d/ 2>/dev/null
+}
+
+if [ -n "$INSTALL_USER" ]; then
+    print_status "Snapshotting sudoers (protecting passwordless sudo for '$INSTALL_USER')..."
+    sudo mkdir -p "$SUDOERS_BACKUP_DIR"
+    sudo cp -a /etc/sudoers   "$SUDOERS_BACKUP_DIR/sudoers"   2>/dev/null || true
+    sudo cp -a /etc/sudoers.d "$SUDOERS_BACKUP_DIR/sudoers.d" 2>/dev/null || true
+    NOPASSWD_RULES="$(find_user_nopasswd_rules)"
+    if [ -n "$NOPASSWD_RULES" ]; then
+        NOPASSWD_WAS_PRESENT=1
+        print_status "Passwordless sudo present for '$INSTALL_USER' — will restore it if the upgrade removes it."
+    fi
+fi
+
+# --- Auto-answer dpkg conffile prompts for the whole upgrade ---
+# The dist-upgrade below AND do-release-upgrade in Step 3 otherwise stop on
+# interactive "Configuration file '/etc/sudoers' ... (Y/I/N/O/D/Z)" dialogs buried
+# in verbose output. A temporary apt.conf.d drop-in makes every apt/dpkg call
+# (including the release upgrader, which can't take -o flags) install the
+# maintainer's version (the "Y/I" answer) so 22.04 gets clean new-release defaults.
+CONFFILE_DROPIN="/etc/apt/apt.conf.d/99flsun-noninteractive"
+sudo tee "$CONFFILE_DROPIN" >/dev/null <<'EOF'
+Dpkg::Options { "--force-confnew"; };
+APT::Get::Assume-Yes "true";
+EOF
+
+# Restore passwordless sudo if the upgrade dropped it, then remove the drop-in.
+# Runs on every exit path (normal end, no-new-release, error) via the trap below.
+restore_sudo_and_cleanup() {
+    sudo rm -f "$CONFFILE_DROPIN"
+
+    [ "$NOPASSWD_WAS_PRESENT" -eq 1 ] || return 0
+    if find_user_nopasswd_rules | grep -q .; then
+        print_success "Passwordless sudo for '$INSTALL_USER' survived the upgrade."
+        return 0
+    fi
+
+    print_warning "Upgrade removed passwordless sudo for '$INSTALL_USER' — restoring via /etc/sudoers.d/."
+    local dropin="/etc/sudoers.d/99-flsun-nopasswd"
+    local tmp
+    tmp="$(mktemp)"
+    # Restore the EXACT rule(s) captured pre-upgrade — never widen the grant.
+    printf '%s\n' "$NOPASSWD_RULES" > "$tmp"
+    # Validate in isolation BEFORE installing — an invalid sudoers file locks out sudo.
+    if sudo visudo -cf "$tmp" >/dev/null 2>&1; then
+        sudo install -m 0440 -o root -g root "$tmp" "$dropin"
+        if sudo visudo -c >/dev/null 2>&1; then
+            print_success "Restored passwordless sudo for '$INSTALL_USER' ($dropin)."
+        else
+            sudo rm -f "$dropin"
+            print_error "Full sudoers validation failed after restore — removed drop-in to keep sudo working."
+            print_warning "Pre-upgrade sudoers backup: $SUDOERS_BACKUP_DIR"
+        fi
+    else
+        print_error "Captured sudo rule did not validate standalone — not modifying sudo config."
+        print_warning "Restore manually from: $SUDOERS_BACKUP_DIR"
+    fi
+    rm -f "$tmp"
+}
+trap restore_sudo_and_cleanup EXIT
+
+print_status "Conffile prompts will be auto-answered (install maintainer's version) for this upgrade."
 
 # --- Step 1: Fully update current system first ---
 print_header "Step 1 of 3 — Update current system"

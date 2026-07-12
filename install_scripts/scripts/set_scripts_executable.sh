@@ -6,7 +6,9 @@ print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
 # Define the repo root relative to this script
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# BASH_SOURCE[0] is .../install_scripts/scripts/set_scripts_executable.sh,
+# so we need two levels up (scripts -> install_scripts -> repo root).
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 # Get installer user (unchanged)
 INSTALLER_USER=""
