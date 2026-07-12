@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-# Source shared utilities (safe - no breaking changes)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHARED_UTILS="$SCRIPT_DIR/shared_utilities.sh"
-if [ -f "$SHARED_UTILS" ]; then
-    source "$SHARED_UTILS"
-    # Set up signal handling for graceful cleanup
-    setup_signal_handlers
-else
-    # Fallback functions
-    print_status() { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
-    print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
-    print_warning() { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
-    print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
-fi
+print_status() { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
+print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
 # Get the actual user who called sudo (not root)
 if [ -n "$SUDO_USER" ]; then
@@ -27,8 +17,6 @@ fi
 
 echo -e "\e[34m🔧 Setting up Git branch display for user: $ACTUAL_USER\e[0m"
 echo -e "\e[34mℹ️  User home directory: $ACTUAL_HOME\e[0m"
-
-SCRIPT_PATH="$ACTUAL_HOME/LinuxSetups/install_scripts/scripts/add_bash_show_branch_name.sh"
 
 # Function: Get Git branch
 get_git_branch() {

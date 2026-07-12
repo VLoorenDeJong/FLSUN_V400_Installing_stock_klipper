@@ -1,5 +1,10 @@
 #!/bin/bash
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+
 # Define the repo root relative to this script
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -27,19 +32,19 @@ fi
 # FIXED: backup_config is now relative to the repo
 BACKUP_CONFIG_DIR="$REPO_DIR/backup_config"
 
-echo -e "\e[34m🔧 Setting executable permissions for scripts...\e[0m"
+print_status "Setting executable permissions for scripts..."
 
 # Make repo scripts executable
 if [[ -d "$REPO_DIR" ]]; then
     sudo chmod -R +x "$REPO_DIR"
     if [[ $? -eq 0 ]]; then
-        echo -e "\e[32m✅ All scripts in $REPO_DIR are now executable!\e[0m"
+        print_success "All scripts in $REPO_DIR are now executable!"
     else
-        echo -e "\e[31m❌ Failed to set executable permissions for $REPO_DIR!\e[0m"
+        print_error "Failed to set executable permissions for $REPO_DIR!"
         exit 1
     fi
 else
-    echo -e "\e[31m❌ Error: $REPO_DIR not found!\e[0m"
+    print_error "Error: $REPO_DIR not found!"
     exit 1
 fi
 
@@ -47,30 +52,13 @@ fi
 if [[ -d "$BACKUP_CONFIG_DIR" ]]; then
     sudo chmod -R +x "$BACKUP_CONFIG_DIR"
     if [[ $? -eq 0 ]]; then
-        echo -e "\e[32m✅ All scripts in $BACKUP_CONFIG_DIR are now executable!\e[0m"
+        print_success "All scripts in $BACKUP_CONFIG_DIR are now executable!"
     else
-        echo -e "\e[31m❌ Failed to set executable permissions for $BACKUP_CONFIG_DIR!\e[0m"
+        print_error "Failed to set executable permissions for $BACKUP_CONFIG_DIR!"
         exit 1
     fi
 else
-    echo -e "\e[33m⚠️  Warning: $BACKUP_CONFIG_DIR not found (may not be created yet)\e[0m"
+    print_warning "Warning: $BACKUP_CONFIG_DIR not found (may not be created yet)"
 fi
 
-# FIXED: maintenance scripts also relative to repo
-BACKUP_DIR="$REPO_DIR/backup_config"
-MAINTENANCE_SCRIPTS_DIR="$BACKUP_DIR/maintenance_scripts/scripts"
-
-if [[ ! -d "$MAINTENANCE_SCRIPTS_DIR" ]]; then
-    echo -e "\e[33m⚠️  Scripts directory $MAINTENANCE_SCRIPTS_DIR not found. Creating it...\e[0m"
-    mkdir -p "$MAINTENANCE_SCRIPTS_DIR"
-fi
-
-sudo chmod -R +x "$MAINTENANCE_SCRIPTS_DIR"
-if [[ $? -eq 0 ]]; then
-    echo -e "\e[32m✅ All scripts in $MAINTENANCE_SCRIPTS_DIR are now executable!\e[0m"
-else
-    echo -e "\e[31m❌ Failed to set executable permissions for $MAINTENANCE_SCRIPTS_DIR!\e[0m"
-    exit 1
-fi
-
-echo -e "\e[32m🎉 Script executable permissions setup complete!\e[0m"
+print_success "Script executable permissions setup complete!"

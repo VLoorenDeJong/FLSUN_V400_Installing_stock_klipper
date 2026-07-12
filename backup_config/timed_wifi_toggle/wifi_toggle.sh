@@ -60,7 +60,7 @@ echo "[$(date)] WiFi toggle script started" >> "$LOGFILE"
 # DISABLE WIFI
 # ==========================
 echo "[$(date)] Disabling WiFi..." >> "$LOGFILE"
-nmcli radio wifi off
+nmcli radio wifi off || echo "[$(date)] WARNING: 'nmcli radio wifi off' failed" >> "$LOGFILE"
 
 # ==========================
 # WAIT
@@ -72,9 +72,34 @@ sleep "$SLEEP_TIME"
 # ENABLE WIFI
 # ==========================
 echo "[$(date)] Enabling WiFi..." >> "$LOGFILE"
-nmcli radio wifi on
+nmcli radio wifi on || echo "[$(date)] WARNING: 'nmcli radio wifi on' failed" >> "$LOGFILE"
+
+# ==========================
+# VERIFY RECONNECTION
+# ==========================
+# Poll for up to 15s instead of assuming "radio on" means "back online" -
+# reassociation + DHCP takes longer than the 250ms gap above, especially
+# on the flaky connections this toggle exists to work around.
+RECONNECT_TIMEOUT=15
+STATE="unknown"
+RECONNECTED=0
+echo "[$(date)] Verifying reconnection (up to ${RECONNECT_TIMEOUT}s)..." >> "$LOGFILE"
+for _ in $(seq 1 "$RECONNECT_TIMEOUT"); do
+    STATE=$(nmcli -t -f STATE general status 2>/dev/null || echo "unknown")
+    if [ "$STATE" = "connected" ]; then
+        RECONNECTED=1
+        break
+    fi
+    sleep 1
+done
 
 # ==========================
 # LOG END
 # ==========================
-echo "[$(date)] WiFi toggle script finished" >> "$LOGFILE"
+if [ "$RECONNECTED" -eq 1 ]; then
+    echo "[$(date)] WiFi toggle script finished — reconnected (state: connected)" >> "$LOGFILE"
+    exit 0
+else
+    echo "[$(date)] ALERT: WiFi toggle script finished but did NOT reconnect within ${RECONNECT_TIMEOUT}s (last state: $STATE)" >> "$LOGFILE"
+    exit 1
+fi

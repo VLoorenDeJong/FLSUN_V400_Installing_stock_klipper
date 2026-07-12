@@ -4,21 +4,6 @@ set -e
 # Repository Cleanup Script
 # Removes problematic repositories and cleans apt cache
 
-# Source shared utilities (safe - no breaking changes)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHARED_UTILS="$SCRIPT_DIR/shared_utilities.sh"
-if [ -f "$SHARED_UTILS" ]; then
-    source "$SHARED_UTILS"
-    # Set up signal handling for graceful cleanup
-    setup_signal_handlers
-else
-    # Fallback functions
-    print_status() { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
-    print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
-    print_warning() { printf "\033[33m⚠️ %s\033[0m\n" "$1"; }
-    print_error() { printf "\033[31m❌ %s\033[0m\n" "$1"; }
-fi
-
 # Function to check and fix DPKG locks (calls dedicated script)
 check_and_fix_dpkg_lock() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

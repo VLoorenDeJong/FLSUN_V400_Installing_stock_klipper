@@ -1,5 +1,10 @@
 #!/bin/bash
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+
 # Function to run commands with appropriate privileges
 run_privileged() {
     if [ "$EUID" -eq 0 ]; then
@@ -19,7 +24,7 @@ find_dpkg_processes() {
 
 # Function to clean package cache
 clean_package_cache() {
-    echo -e "\e[34m🔄 Cleaning package cache...\e[0m"
+    print_status "Cleaning package cache..."
 
     # Remove corrupted package cache files
     run_privileged rm -f /var/cache/apt/*.bin
@@ -34,7 +39,7 @@ clean_package_cache() {
 # Better lock detection - check for actual lock files AND processes
 check_dpkg_lock() {
     local lock_detected=false
-    
+
     # Check if lock files exist AND are being used by processes
     if [ -f "/var/lib/dpkg/lock-frontend" ]; then
         local processes=$(find_dpkg_processes)
@@ -42,7 +47,7 @@ check_dpkg_lock() {
             lock_detected=true
         fi
     fi
-    
+
     # Alternative: Check if dpkg/apt commands are actually blocked
     if ! $lock_detected; then
         # Try a simple dpkg status check (less likely to fail for other reasons)
@@ -54,37 +59,37 @@ check_dpkg_lock() {
             fi
         fi
     fi
-    
+
     echo $lock_detected
 }
 
-echo -e "\e[34m🔍 Checking for dpkg/lock-frontend and package cache issues...\e[0m"
+print_status "Checking for dpkg/lock-frontend and package cache issues..."
 
 # Test if we have a real dpkg lock issue
 if [ "$(check_dpkg_lock)" = "false" ]; then
-    echo -e "\e[32m✅ No dpkg lock detected. System is ready for package operations.\e[0m"
+    print_success "No dpkg lock detected. System is ready for package operations."
     exit 0
 else
-    echo -e "\e[33m⚠️  dpkg lock detected. Attempting to fix...\e[0m"
+    print_warning "dpkg lock detected. Attempting to fix..."
 fi
 
 # Step 1: Find and kill processes using dpkg lock
-echo -e "\e[34m🔄 Finding and killing dpkg processes...\e[0m"
+print_status "Finding and killing dpkg processes..."
 dpkg_processes=$(find_dpkg_processes)
 
 if [ -n "$dpkg_processes" ]; then
-    echo -e "\e[33m📋 Found processes: $dpkg_processes\e[0m"
+    print_warning "Found processes: $dpkg_processes"
     for pid in $dpkg_processes; do
         run_privileged kill -9 "$pid" 2>/dev/null || true
     done
     sleep 2
-    echo -e "\e[32m✅ Processes killed\e[0m"
+    print_success "Processes killed"
 else
-    echo -e "\e[32m✅ No active processes found\e[0m"
+    print_success "No active processes found"
 fi
 
 # Step 2: Remove lock files
-echo -e "\e[34m🔄 Removing dpkg lock files...\e[0m"
+print_status "Removing dpkg lock files..."
 
 lock_files=("/var/lib/dpkg/lock-frontend" "/var/lib/dpkg/lock")
 lock_files_removed=0
@@ -96,38 +101,38 @@ for lock_file in "${lock_files[@]}"; do
 done
 
 if [ $lock_files_removed -gt 0 ]; then
-    echo -e "\e[32m✅ Removed $lock_files_removed lock files\e[0m"
+    print_success "Removed $lock_files_removed lock files"
 else
-    echo -e "\e[32m✅ No lock files found\e[0m"
+    print_success "No lock files found"
 fi
 
 # Step 3: Clean package cache
-echo -e "\e[34m🔄 Cleaning package cache...\e[0m"
+print_status "Cleaning package cache..."
 clean_package_cache
-echo -e "\e[32m✅ Package cache cleaned\e[0m"
+print_success "Package cache cleaned"
 
 # Step 4: Configure dpkg
-echo -e "\e[34m🔄 Configuring dpkg...\e[0m"
+print_status "Configuring dpkg..."
 if run_privileged dpkg --configure -a >/dev/null 2>&1; then
-    echo -e "\e[32m✅ dpkg configured\e[0m"
+    print_success "dpkg configured"
 else
-    echo -e "\e[31m❌ dpkg configuration failed\e[0m"
+    print_error "dpkg configuration failed"
 fi
 
 # Step 5: Fix broken dependencies
-echo -e "\e[34m🔄 Fixing dependencies...\e[0m"
+print_status "Fixing dependencies..."
 if run_privileged apt-get install -f -qq >/dev/null 2>&1; then
-    echo -e "\e[32m✅ Dependencies fixed\e[0m"
+    print_success "Dependencies fixed"
 else
-    echo -e "\e[31m❌ Dependency fix failed\e[0m"
+    print_error "Dependency fix failed"
 fi
 
 # Step 6: Test if fix worked
-echo -e "\e[34m🔄 Testing fix...\e[0m"
+print_status "Testing fix..."
 if [ "$(check_dpkg_lock)" = "false" ]; then
-    echo -e "\e[32m🎉 Success! dpkg lock resolved\e[0m"
+    print_success "Success! dpkg lock resolved"
     exit 0
 else
-    echo -e "\e[31m❌ dpkg lock persists\e[0m"
+    print_error "dpkg lock persists"
     exit 1
 fi

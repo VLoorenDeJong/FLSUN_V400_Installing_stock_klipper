@@ -3,6 +3,17 @@ set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
+
+if [ "$(id -u)" -ne 0 ]; then
+    print_error "This script must run with sudo/root privileges."
+    exit 1
+fi
+
 if [ -n "$SUDO_USER" ]; then
     ACTUAL_USER="$SUDO_USER"
     ACTUAL_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
@@ -72,26 +83,6 @@ show_progress() {
 
     printf "\n"  # New line after dots
     return $exit_code
-}
-
-# Function to print status messages
-print_status() {
-    printf "\033[34m🔧 %s\033[0m\n" "$1"
-}
-
-# Function to print success messages
-print_success() {
-    printf "\033[32m✅ %s\033[0m\n" "$1"
-}
-
-# Function to print warnings
-print_warning() {
-    printf "\033[33m⚠️ %s\033[0m\n" "$1"
-}
-
-# Function to print errors
-print_error() {
-    printf "\033[31m❌ %s\033[0m\n" "$1"
 }
 
 print_status "Setting up Samba..."
@@ -569,40 +560,6 @@ setup_folder_permissions() {
     fi
 }
 
-# Function to process template scripts (replace __INSTALLER_USER__ placeholders)
-process_template_scripts() {
-    local backup_config_dir="$1"
-    local real_user="$2"
-    local scripts_dir="$backup_config_dir/maintenance_scripts/scripts"
-    
-    print_status "Processing template scripts in maintenance_scripts/scripts..."
-    
-    if [ ! -d "$scripts_dir" ]; then
-        print_warning "Scripts directory not found: $scripts_dir"
-        return 0
-    fi
-    
-    local processed_count=0
-    
-    # Process all .sh files in the scripts directory
-    for script_file in "$scripts_dir"/*.sh; do
-        if [ -f "$script_file" ] && grep -q "__INSTALLER_USER__" "$script_file"; then
-            print_status "Processing template: $(basename "$script_file")"
-            # Replace placeholder with actual username
-            sed -i "s/__INSTALLER_USER__/$real_user/g" "$script_file"
-            ((processed_count++))
-        fi
-    done
-    
-    if [ $processed_count -gt 0 ]; then
-        print_success "Processed $processed_count template script(s)"
-    else
-        print_status "No template scripts to process"
-    fi
-    
-    return 0
-}
-
 print_status "Configuring Samba shares..."
 
 if [ -n "$SUDO_USER" ]; then
@@ -679,11 +636,6 @@ if [ -d "$BACKUP_CONFIG" ] && [ -f "$SMB_CONFIG" ]; then
             setup_folder_permissions "$essential_dir"
         fi
     done
-
-    # Process template scripts that contain __INSTALLER_USER__ placeholders
-    if [ -d "$BACKUP_CONFIG" ]; then
-        process_template_scripts "$BACKUP_CONFIG" "$ACTUAL_USER"
-    fi
 
     if [ -L "$SYSTEM_SMB_CONFIG" ]; then
         current_target=$(readlink "$SYSTEM_SMB_CONFIG")

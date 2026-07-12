@@ -7,6 +7,10 @@ set -e
 #   2 = install Klipper / Moonraker / Mainsail
 SESSION="${1:-}"
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+
 TARGET_USER="${SUDO_USER:-}"
 if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
     if id pi >/dev/null 2>&1; then
@@ -18,27 +22,27 @@ fi
 
 TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 if [ -z "$TARGET_HOME" ]; then
-    echo -e "\e[31m❌ Could not determine home directory for user: $TARGET_USER\e[0m"
+    print_error "Could not determine home directory for user: $TARGET_USER"
     exit 1
 fi
 
 KIAUH_SCRIPT="${TARGET_HOME}/kiauh/kiauh.sh"
 
 if [ ! -f "$KIAUH_SCRIPT" ]; then
-    echo -e "\e[31m❌ KIAUH script not found: $KIAUH_SCRIPT\e[0m"
-    echo -e "\e[33m💡 Run add_kiauh.sh first to clone KIAUH.\e[0m"
+    print_error "KIAUH script not found: $KIAUH_SCRIPT"
+    print_warning "Run add_kiauh.sh first to clone KIAUH."
     exit 1
 fi
 
 chmod +x "$KIAUH_SCRIPT"
 
 if pgrep -f "kiauh/kiauh\.sh" >/dev/null 2>&1; then
-    echo -e "\e[33m⚠️ A stale KIAUH process was detected. Killing it before relaunching...\e[0m"
+    print_warning "A stale KIAUH process was detected. Killing it before relaunching..."
     pkill -f "kiauh/kiauh\.sh" || true
     sleep 1
 fi
 
-echo -e "\e[34m🚀 Starting KIAUH as user: $TARGET_USER\e[0m"
+print_status "Starting KIAUH as user: $TARGET_USER"
 
 case "$SESSION" in
     1)

@@ -52,7 +52,7 @@ should_show_reboot_messages() {
             # Normalize to lower-case for matching
             local lc
             lc=$(printf '%s' "$parent_cmdline" | tr '[:upper:]' '[:lower:]')
-            if [[ "$lc" == *"start_sinstall.sh"* ]] || [[ "$lc" == *"start-sinstall.sh"* ]]; then
+            if [[ "$lc" == *"start_install.sh"* ]] || [[ "$lc" == *"start-install.sh"* ]]; then
                 return 1
             fi
         fi

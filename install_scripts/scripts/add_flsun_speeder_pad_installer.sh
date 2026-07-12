@@ -3,6 +3,11 @@ set -e
 
 export DEBIAN_FRONTEND=noninteractive
 
+print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
+print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
+print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
+print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
+
 INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer1.sh"
 STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
@@ -16,12 +21,12 @@ debug() {
 }
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo -e "\e[31m❌ This script must run with sudo/root privileges.\e[0m"
+    print_error "This script must run with sudo/root privileges."
     exit 1
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
-    echo -e "\e[34m🔧 Installing curl\e[0m"
+    print_status "Installing curl"
     apt-get update -qq
     apt-get install -y -qq curl
 fi
@@ -39,23 +44,23 @@ TARGET_DIR="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 TARGET_SCRIPT="${TARGET_DIR}/sp_installer1.sh"
 
 if [ -z "$TARGET_DIR" ]; then
-    echo -e "\e[31m❌ Could not determine home directory for user: $TARGET_USER\e[0m"
+    print_error "Could not determine home directory for user: $TARGET_USER"
     exit 1
 fi
 
 if [ ! -d "$TARGET_DIR" ]; then
-    echo -e "\e[31m❌ Target directory does not exist: $TARGET_DIR\e[0m"
-    echo -e "\e[33m💡 This installer expects the Speeder Pad/pi environment.\e[0m"
+    print_error "Target directory does not exist: $TARGET_DIR"
+    print_warning "This installer expects the Speeder Pad/pi environment."
     exit 1
 fi
 
 if [ -f "$STATE_FILE" ] && [ "$FORCE_RUN" != "1" ]; then
-    echo -e "\e[33m⚠️ Speeder Pad installer already executed before. Skipping.\e[0m"
-    echo -e "\e[33m💡 To force rerun: FORCE_RUN_FL_SPEEDEDPAD_INSTALLER=1 sudo bash $0\e[0m"
+    print_warning "Speeder Pad installer already executed before. Skipping."
+    print_warning "To force rerun: FORCE_RUN_FL_SPEEDEDPAD_INSTALLER=1 sudo bash $0"
     exit 0
 fi
 
-echo -e "\e[34m🔧 Downloading Speeder Pad installer to $TARGET_SCRIPT\e[0m"
+print_status "Downloading Speeder Pad installer to $TARGET_SCRIPT"
 
 # -------------------------------
 # NEW: fallback logic
@@ -71,24 +76,24 @@ debug "Fallback installer path: $FALLBACK_INSTALLER"
 if curl -fsSL "$INSTALLER_URL" -o "$TARGET_SCRIPT"; then
     debug "Remote installer downloaded successfully."
 else
-    echo -e "\e[33m⚠️ Remote installer unavailable, using fallback.\e[0m"
+    print_warning "Remote installer unavailable, using fallback."
     debug "Remote installer download failed."
 
     if [ -f "$FALLBACK_INSTALLER" ]; then
         cp "$FALLBACK_INSTALLER" "$TARGET_SCRIPT"
         debug "Fallback installer copied to $TARGET_SCRIPT"
     else
-        echo -e "\e[31m❌ Fallback installer not found at: $FALLBACK_INSTALLER\e[0m"
+        print_error "Fallback installer not found at: $FALLBACK_INSTALLER"
         exit 1
     fi
 fi
 
 chmod +x "$TARGET_SCRIPT"
 
-echo -e "\e[34m🚀 Running Speeder Pad installer\e[0m"
+print_status "Running Speeder Pad installer"
 bash "$TARGET_SCRIPT"
 
 mkdir -p "$STATE_DIR"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$STATE_FILE"
 
-echo -e "\e[32m✅ Speeder Pad installer completed\e[0m"
+print_success "Speeder Pad installer completed"
