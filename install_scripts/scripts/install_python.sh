@@ -78,7 +78,7 @@ fi
 
 if [ -f "$STATE_FILE" ] && [ "$FORCE_RUN" != "1" ]; then
     print_warning "Python already installed previously. Skipping."
-    print_warning "To force rerun: FORCE_RUN_PYTHON=1 sudo bash $0"
+    print_warning "To force rerun: sudo env FORCE_RUN_PYTHON=1 bash $0"
     exit 0
 fi
 

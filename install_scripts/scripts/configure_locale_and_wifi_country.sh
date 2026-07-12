@@ -410,7 +410,7 @@ CURRENT_COUNTRY_CODE="$($IW_BIN reg get 2>/dev/null | awk '/^country /{code=$2; 
 
 if [ "$FORCE_RUN" != "1" ] && [ "$CURRENT_TIMEZONE" = "$TIMEZONE" ] && [ "$CURRENT_COUNTRY_CODE" = "$COUNTRY_CODE" ]; then
     print_warning "Timezone and Wi-Fi country already configured ($TIMEZONE / $COUNTRY_CODE). Skipping."
-    print_warning "To force rerun: FORCE_RUN_LOCALE_WIFI=1 sudo bash $0 $TIMEZONE $COUNTRY_CODE"
+    print_warning "To force rerun: sudo env FORCE_RUN_LOCALE_WIFI=1 bash $0 $TIMEZONE $COUNTRY_CODE"
     exit 0
 fi
 

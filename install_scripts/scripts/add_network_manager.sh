@@ -204,7 +204,12 @@ ACTIVE_WIFI_CON=$(nmcli -t -f NAME,DEVICE,TYPE connection show \
 print_status "Active WiFi profile: $ACTIVE_WIFI_CON"
 
 print_status "Flushing systemd-resolved cache"
-systemd-resolve --flush-caches || true
+# 22.04 renamed systemd-resolve to resolvectl; support both.
+if command -v resolvectl >/dev/null 2>&1; then
+    resolvectl flush-caches || true
+else
+    systemd-resolve --flush-caches 2>/dev/null || true
+fi
 
 print_status "Restarting systemd-resolved"
 systemctl restart systemd-resolved || true
