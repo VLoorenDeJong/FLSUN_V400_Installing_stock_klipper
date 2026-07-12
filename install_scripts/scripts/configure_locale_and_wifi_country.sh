@@ -23,11 +23,28 @@ if ! command -v timedatectl >/dev/null 2>&1; then
     exit 1
 fi
 
-# --- Determine timezone: CLI arg if given, otherwise prompt (retry on typo) ---
-# NOTE: all interactive reads pull from /dev/tty, not stdin. start_install.sh
-# runs child scripts with stdin redirected and may have buffered input; reading
-# from stdin here lets a stray character get swallowed without blocking.
+# --- Timezone: from CLI arg if given, otherwise DERIVED from the country below ---
+# Interactive mode does NOT ask for a timezone separately — the country you pick
+# determines it (e.g. NL -> Europe/Amsterdam). See the derivation right after the
+# country prompt. CLI arg $1 still lets you force a specific zone.
+# NOTE: interactive reads pull from /dev/tty, not stdin (start_install.sh
+# redirects child stdin and may have buffered input).
 valid_timezone() { timedatectl list-timezones 2>/dev/null | grep -Fxq "$1"; }
+
+# Emit the IANA timezone(s) for an ISO-3166-1 country code, from the tzdata
+# country table. Handles both zone1970.tab (codes are comma-joined) and the
+# legacy zone.tab (one code per row).
+zones_for_country() {
+    local cc="$1" tab
+    for tab in /usr/share/zoneinfo/zone1970.tab /usr/share/zoneinfo/zone.tab; do
+        [ -f "$tab" ] || continue
+        awk -F'\t' -v cc="$cc" '
+            /^#/ { next }
+            { n = split($1, a, ","); for (i=1;i<=n;i++) if (a[i]==cc) { print $3; break } }
+        ' "$tab"
+        return 0
+    done
+}
 
 if [ -n "${1:-}" ]; then
     TIMEZONE="$1"
@@ -37,12 +54,7 @@ if [ -n "${1:-}" ]; then
         exit 1
     fi
 else
-    while true; do
-        read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT </dev/tty
-        TIMEZONE="${TZ_INPUT:-Europe/Amsterdam}"
-        valid_timezone "$TIMEZONE" && break
-        print_warning "'$TIMEZONE' is not a valid timezone — the country question comes next, this one wants a zone like Europe/Amsterdam or America/New_York. Try again."
-    done
+    TIMEZONE=""   # derived from the chosen country code after the country prompt
 fi
 
 # --- ISO-3166-1 alpha-2 country/territory table: "CODE:Name" ---
@@ -356,12 +368,41 @@ fi
 
 IW_BIN="$(command -v iw)"
 
-# Timezone was already validated at the prompt above (retry loop) or, for the
-# CLI-arg path, checked and rejected there — no need to re-validate here.
-
 if ! printf '%s' "$COUNTRY_CODE" | grep -Eq '^[A-Z]{2}$'; then
     print_error "Country code must be 2 letters (ISO-3166-1 alpha-2), got: $COUNTRY_CODE"
     exit 1
+fi
+
+# --- Derive the timezone from the chosen country (interactive mode) ---
+# TIMEZONE is empty unless a CLI arg forced it. Look up the country's zone(s):
+# one zone -> use it silently; several -> let the user pick; none -> ask manually.
+if [ -z "$TIMEZONE" ]; then
+    mapfile -t TZ_ZONES < <(zones_for_country "$COUNTRY_CODE" | awk 'NF')
+    if [ "${#TZ_ZONES[@]}" -eq 1 ]; then
+        TIMEZONE="${TZ_ZONES[0]}"
+        print_success "Timezone for $COUNTRY_CODE: $TIMEZONE"
+    elif [ "${#TZ_ZONES[@]}" -gt 1 ]; then
+        echo "$COUNTRY_CODE spans multiple timezones — pick yours:"
+        for i in "${!TZ_ZONES[@]}"; do
+            printf "  %2d) %s\n" "$((i+1))" "${TZ_ZONES[$i]}"
+        done
+        read -rp "Timezone number [default 1]: " TZ_PICK </dev/tty
+        TZ_PICK="${TZ_PICK:-1}"
+        if [[ "$TZ_PICK" =~ ^[0-9]+$ ]] && [ "$TZ_PICK" -ge 1 ] && [ "$TZ_PICK" -le "${#TZ_ZONES[@]}" ]; then
+            TIMEZONE="${TZ_ZONES[$((TZ_PICK-1))]}"
+        else
+            TIMEZONE="${TZ_ZONES[0]}"
+        fi
+        print_success "Timezone: $TIMEZONE"
+    else
+        print_warning "No timezone mapping found for $COUNTRY_CODE — enter it manually."
+        while true; do
+            read -rp "Enter your timezone (e.g. Europe/Amsterdam) [default: Europe/Amsterdam]: " TZ_INPUT </dev/tty
+            TIMEZONE="${TZ_INPUT:-Europe/Amsterdam}"
+            valid_timezone "$TIMEZONE" && break
+            print_warning "'$TIMEZONE' is not a valid timezone — try e.g. Europe/Amsterdam."
+        done
+    fi
 fi
 
 CURRENT_TIMEZONE="$(timedatectl show -p Timezone --value 2>/dev/null || true)"
@@ -378,21 +419,6 @@ timedatectl set-timezone "$TIMEZONE"
 
 print_status "Enabling NTP time sync"
 timedatectl set-ntp true || true
-
-# --- SAFETY NET: timed rollback reboot in case the regdomain change disrupts WiFi ---
-# This script runs in Phase 1, before NetworkManager is installed (add_network_manager.sh
-# runs later), so we can't rely on nmcli here — check for a live default route instead.
-network_is_up() {
-    ip route show default 2>/dev/null | grep -q default
-}
-
-(
-    sleep 300
-    echo "[SAFETY] No cancel detected after Wi-Fi regdomain change, rebooting to restore network..."
-    systemctl --no-wall reboot 2>/dev/null || reboot
-) &
-SAFETY_PID=$!
-print_status "[SAFETY] Rollback timer started (PID $SAFETY_PID). Will auto-cancel below if the network is still up."
 
 print_status "Applying Wi-Fi regulatory domain to $COUNTRY_CODE"
 iw reg set "$COUNTRY_CODE"
@@ -440,14 +466,6 @@ timedatectl | sed -n '1,8p'
 
 print_status "Current Wi-Fi regulatory domain:"
 iw reg get | sed -n '1,8p'
-
-# --- Cancel safety reboot if network is still up ---
-if network_is_up; then
-    print_success "[SAFETY] Network still up after regdomain change. Cancelling rollback reboot timer."
-    kill "$SAFETY_PID" 2>/dev/null || true
-else
-    print_warning "[SAFETY] No default route detected. Rollback reboot will occur in up to 5 minutes unless connectivity returns."
-fi
 
 print_success "Timezone and Wi-Fi country configuration complete"
 print_warning "If your network stack does not pick this up immediately, reboot once."

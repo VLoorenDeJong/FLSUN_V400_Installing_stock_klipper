@@ -7,19 +7,6 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-# --- SAFETY NET: Timed rollback for remote SSH ---
-# This will reboot the device in 5 minutes unless you cancel it (kill %1 or pkill -f 'sleep 300 && reboot')
-(
-    sleep 300
-    echo "[SAFETY] No cancel detected, rebooting to restore network..."
-    if [ "$(id -u)" -eq 0 ]; then
-        systemctl --no-wall reboot 2>/dev/null || reboot
-    else
-        echo "[SAFETY] Not running as root; skipping automatic reboot."
-    fi
-) &
-SAFETY_PID=$!
-echo "[SAFETY] Rollback timer started (PID $SAFETY_PID). If network is up and stable, run: kill $SAFETY_PID to cancel reboot."
 set -e
 
 # --- ABSOLUTELY FIRST: Print WiFi credentials before anything else, no other output above this ---
@@ -220,80 +207,26 @@ nmcli connection up "$ACTIVE_WIFI_CON" || true
 
 print_success "DNS refreshed from router"
 
-# 1. Disable competing network managers so they do NOT restart after reboot.
-#    This system uses systemd-networkd (not dhcpcd) — it MUST be disabled.
-#    wpa_supplicant runs in D-Bus mode (-u -s); NM reuses it, so only STOP it.
+# 1. Prepare to hand over to NetworkManager WITHOUT dropping the live connection.
+#    We only turn OFF autostart of the competing managers here (so NM wins on the
+#    next boot) — we do NOT stop them yet, so your current WiFi stays up while NM
+#    is configured below. The actual switch-over happens at the very END of this
+#    script, in a detached block that verifies connectivity and rolls back if it
+#    fails, so this script can never strand the box.
+#    Capture what's running now (so the rollback knows what to restore) and the
+#    gateway (for the post-handover health check).
+NET_HAD_NETWORKD=0; systemctl is-active --quiet systemd-networkd && NET_HAD_NETWORKD=1
+NET_HAD_WPA=0;      systemctl is-active --quiet wpa_supplicant   && NET_HAD_WPA=1
+NET_GATEWAY="$(ip route show default 2>/dev/null | awk '/default/{print $3; exit}')"
+print_status "Captured current network state (networkd=$NET_HAD_NETWORKD wpa=$NET_HAD_WPA gw=${NET_GATEWAY:-none})"
 
-print_status "Disabling systemd-networkd (actual network manager on this system)"
-if systemctl list-unit-files | grep -q '^systemd-networkd\.service'; then
-    systemctl -q disable systemd-networkd 2>/dev/null || true
-    systemctl stop systemd-networkd 2>/dev/null || true
-    print_success "systemd-networkd disabled and stopped"
-else
-    print_status "systemd-networkd.service does not exist. Skipping."
-fi
-
-print_status "Disabling systemd-networkd-wait-online (depends on systemd-networkd)"
-if systemctl list-unit-files | grep -q '^systemd-networkd-wait-online\.service'; then
-    systemctl -q disable systemd-networkd-wait-online 2>/dev/null || true
-    systemctl stop systemd-networkd-wait-online 2>/dev/null || true
-    print_success "systemd-networkd-wait-online disabled and stopped"
-fi
-
-print_status "Disabling networkd-dispatcher (companion to systemd-networkd, can re-activate it)"
-if systemctl list-unit-files | grep -q '^networkd-dispatcher\.service'; then
-    systemctl -q disable networkd-dispatcher 2>/dev/null || true
-    systemctl stop networkd-dispatcher 2>/dev/null || true
-    print_success "networkd-dispatcher disabled and stopped"
-else
-    print_status "networkd-dispatcher.service not found — skipping."
-fi
-
-print_status "Disabling systemd-networkd.socket (can re-activate systemd-networkd)"
-if systemctl list-unit-files | grep -q '^systemd-networkd\.socket'; then
-    systemctl -q disable systemd-networkd.socket 2>/dev/null || true
-    systemctl stop systemd-networkd.socket 2>/dev/null || true
-    print_success "systemd-networkd.socket disabled and stopped"
-fi
-
-print_status "Stopping wpa_supplicant (NM will reuse it via D-Bus — NOT disabling)"
-# wpa_supplicant runs with -u -s (D-Bus mode); NetworkManager manages it after this point.
-# Disabling would prevent NM from using it for WiFi, so we only stop the standalone service.
-if systemctl list-unit-files | grep -q '^wpa_supplicant\.service'; then
-    systemctl stop wpa_supplicant 2>/dev/null || true
-    print_success "wpa_supplicant stopped (left enabled for NM D-Bus reuse)"
-else
-    print_warning "wpa_supplicant.service does not exist. Skipping."
-fi
-
-print_status "Disabling dhcpcd (if present)"
-if systemctl list-unit-files | grep -q '^dhcpcd\.service'; then
-    systemctl -q disable dhcpcd 2>/dev/null || true
-    systemctl stop dhcpcd 2>/dev/null || true
-    print_success "dhcpcd disabled and stopped"
-else
-    print_status "dhcpcd.service not found — skipping (expected on this system)."
-fi
-# Kill any standalone wpa_supplicant processes that are NOT the D-Bus instance NM will reuse.
-# The D-Bus instance (started with -u) will be restarted by NM; interface-bound ones conflict.
-# shellcheck disable=SC2009
-WPA_PIDS=$(pgrep -f wpa_supplicant | while read -r pid; do
-    # Check if the process was started by NetworkManager
-    if ! ps -p "$pid" -o cmd= | grep -q NetworkManager; then
-        echo "$pid"
+print_status "Disabling autostart of competing network managers (leaving them RUNNING for now)"
+for unit in systemd-networkd systemd-networkd-wait-online networkd-dispatcher systemd-networkd.socket dhcpcd; do
+    if systemctl list-unit-files | grep -q "^${unit}"; then
+        systemctl -q disable "$unit" 2>/dev/null || true
     fi
-done)
-if [ -n "$WPA_PIDS" ]; then
-    print_warning "Killing manually started wpa_supplicant processes: $WPA_PIDS (this may drop WiFi if you are connected via wpa_supplicant directly)"
-    for pid in $WPA_PIDS; do
-        kill "$pid" || true
-    done
-    sleep 2
-    print_success "Killed all non-NetworkManager wpa_supplicant processes."
-else
-    print_status "No manual wpa_supplicant processes found."
-fi
-print_success "wpa_supplicant stopped and manual processes killed."
+done
+print_success "Old managers won't auto-start next boot — current connection left untouched."
 
 # 2. Comment out legacy wlan0/eth0 config in /etc/network/interfaces
 IFUPDOWN_CONF="/etc/network/interfaces"
@@ -460,30 +393,56 @@ else
     print_warning "$NM_MAIN_CONF does not exist. NetworkManager may not be fully installed or started yet."
 fi
 
-# --- Cancel safety reboot if network is up ---
-if nmcli -t -f STATE general | grep -q 'connected'; then
-    echo "[SAFETY] Network is up. Cancelling rollback reboot timer."
-    kill $SAFETY_PID
+# --- Hand over from the old stack to NetworkManager: detached + rollback, NO reboot ---
+# This is the ONLY moment the live link can blip. It runs detached (setsid) so an
+# SSH drop during the switch can't kill it. It stops the old stack, brings the WiFi
+# up on NetworkManager, verifies REAL connectivity, and if that fails it restores
+# exactly the services that were running before. Worst case = you're back on your
+# original connection. It never reboots.
+print_status "Handing over to NetworkManager in the background (your SSH may briefly blip)..."
+
+HANDOVER="/tmp/nm-handover.sh"
+cat > "$HANDOVER" <<HEOF
+#!/bin/bash
+exec >>/var/log/nm-handover.log 2>&1
+echo "[handover \$(date -Is)] start (gw=${NET_GATEWAY:-none} ssid=${SSID:-none})"
+
+# Stop the old stack now that NetworkManager is fully configured.
+systemctl stop wpa_supplicant systemd-networkd systemd-networkd.socket \\
+    systemd-networkd-wait-online networkd-dispatcher dhcpcd 2>/dev/null || true
+
+# Make sure NetworkManager owns wlan0 and the profile is up.
+systemctl restart NetworkManager
+nmcli networking on 2>/dev/null || true
+nmcli radio wifi on 2>/dev/null || true
+nmcli device set wlan0 managed yes 2>/dev/null || true
+nmcli connection up "${SSID}" 2>/dev/null || nmcli device connect wlan0 2>/dev/null || true
+systemctl restart systemd-resolved 2>/dev/null || true
+
+# Verify real connectivity (retry ~40s) before trusting the switch.
+ok=0
+for i in \$(seq 1 20); do
+    if ping -c1 -W2 "${NET_GATEWAY:-8.8.8.8}" >/dev/null 2>&1; then ok=1; break; fi
+    sleep 2
+done
+
+if [ "\$ok" = 1 ]; then
+    echo "[handover] SUCCESS — NetworkManager is carrying the connection."
 else
-    echo "[SAFETY] Network not detected as up. Rollback reboot will occur unless cancelled manually."
+    echo "[handover] FAILED — rolling back to the previous network stack (no reboot)."
+    systemctl stop NetworkManager 2>/dev/null || true
+    if [ "${NET_HAD_NETWORKD}" = 1 ]; then systemctl enable --now systemd-networkd 2>/dev/null || true; fi
+    if [ "${NET_HAD_WPA}" = 1 ];      then systemctl start wpa_supplicant 2>/dev/null || true; fi
+    systemctl restart systemd-resolved 2>/dev/null || true
+    echo "[handover] rollback done — previous connection restored."
 fi
+HEOF
+chmod +x "$HANDOVER"
+setsid bash "$HANDOVER" >/dev/null 2>&1 </dev/null &
 
-print_status "Restoring NetworkManager service..."
-
-show_progress "Restarting NetworkManager"
-sudo systemctl restart NetworkManager
-
-show_progress "Enabling networking"
-sudo nmcli networking on
-
-show_progress "Enabling WiFi radio"
-sudo nmcli radio wifi on
-
-show_progress "Reconnecting wlan0"
-sudo nmcli device connect wlan0 || print_warning "Could not auto-connect wlan0"
-
-show_progress "Restarting DNS resolver"
-sudo systemctl restart systemd-resolved
-
-print_status "Network connection restored successfully"
+print_success "Handover launched in the background."
+print_status  "If your SSH blips, reconnect in ~30-60s (same IP if the router cooperates)."
+print_status  "Progress + result logged to /var/log/nm-handover.log"
+print_warning "If the new setup fails its connectivity check, your PREVIOUS connection is"
+print_warning "automatically restored — no reboot, no manual recovery needed."
 
