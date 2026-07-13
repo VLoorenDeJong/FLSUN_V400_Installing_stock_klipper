@@ -22,6 +22,36 @@ print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 print_header()  { printf "\n\033[36m=== %s ===\033[0m\n" "$1"; }
 
+# Inline show_progress function (always used)
+show_progress() {
+    local message="$1"
+    local command="$2"
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    printf "\033[34m%s\033[0m\n" "$message"
+    eval "$command" &
+    local cmd_pid=$!
+    local start_time
+    start_time=$(date +%s)
+    while kill -0 $cmd_pid 2>/dev/null; do
+        printf "."
+        sleep "$interval"
+        local current_time
+        current_time=$(date +%s)
+        if (( current_time - start_time > timeout )); then
+            printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
+            kill -TERM $cmd_pid 2>/dev/null || true
+            sleep 2
+            kill -KILL $cmd_pid 2>/dev/null || true
+            return 1
+        fi
+    done
+    wait $cmd_pid 2>/dev/null
+    local exit_code=$?
+    printf "\n"
+    return $exit_code
+}
+
 had_issues=false
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -63,8 +93,8 @@ else
     TMP_DIR=$(mktemp -d)
     trap 'rm -rf "$TMP_DIR"' EXIT
 
-    print_status "Downloading newer pip wheel..."
-    if python3 -m pip download pip --no-deps --dest "$TMP_DIR" --quiet 2>/dev/null; then
+    if show_progress "📥 Downloading newer pip wheel" \
+        "python3 -m pip download pip --no-deps --dest '$TMP_DIR' --quiet 2>/dev/null" 3 300; then
         NEW_PIP_WHEEL=$(find "$TMP_DIR" -name "pip-*.whl" | sort -V | tail -1)
         if [ -n "$NEW_PIP_WHEEL" ]; then
             NEW_VER=$(basename "$NEW_PIP_WHEEL" | sed 's/pip-\([^-]*\)-.*/\1/')
@@ -113,15 +143,15 @@ for venv in "${VENV_DIRS[@]}"; do
             continue
         fi
 
-        print_status "Upgrading pip in: $(basename "$venv")..."
-
         # Recover venvs where pip entrypoint exists but pip module is missing.
         if ! sudo -u "$TARGET_USER" "$py_bin" -m pip --version >/dev/null 2>&1; then
             print_warning "pip module missing in $(basename "$venv") — attempting ensurepip bootstrap"
-            sudo -u "$TARGET_USER" "$py_bin" -m ensurepip --upgrade --default-pip >/dev/null 2>&1 || true
+            show_progress "🧰 Bootstrapping pip via ensurepip in $(basename "$venv")" \
+                "sudo -u '$TARGET_USER' '$py_bin' -m ensurepip --upgrade --default-pip >/dev/null 2>&1" 3 600 || true
         fi
 
-        if sudo -u "$TARGET_USER" "$py_bin" -m pip install --upgrade pip --quiet; then
+        if show_progress "⬆️  Upgrading pip in $(basename "$venv")" \
+            "sudo -u '$TARGET_USER' '$py_bin' -m pip install --upgrade pip --quiet" 3 600; then
             new_ver=$(sudo -u "$TARGET_USER" "$py_bin" -m pip --version 2>/dev/null | awk '{print $2}')
             print_success "pip → $new_ver in $(basename "$venv")"
             any_upgraded=true
@@ -130,8 +160,8 @@ for venv in "${VENV_DIRS[@]}"; do
             had_issues=true
         fi
     elif [ -x "$pip_bin" ]; then
-        print_status "Upgrading pip in: $(basename "$venv")..."
-        if sudo -u "$TARGET_USER" "$pip_bin" install --upgrade pip --quiet; then
+        if show_progress "⬆️  Upgrading pip in $(basename "$venv")" \
+            "sudo -u '$TARGET_USER' '$pip_bin' install --upgrade pip --quiet" 3 600; then
             new_ver=$(sudo -u "$TARGET_USER" "$pip_bin" --version 2>/dev/null | awk '{print $2}')
             print_success "pip → $new_ver in $(basename "$venv")"
             any_upgraded=true
@@ -164,23 +194,28 @@ if command -v python3.9 >/dev/null 2>&1 && ! python3.9 -m pip --version >/dev/nu
 fi
 
 SETUPTOOLS_LOG=$(mktemp)
-setuptools_pinned=false
 
-if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-elif python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-elif command -v pip3 >/dev/null 2>&1 && pip3 install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-elif command -v pip >/dev/null 2>&1 && pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
-    setuptools_pinned=true
-fi
+# Try each interpreter/pip flavor in order; first success wins. Runs inside
+# show_progress (background subshell), so success is signaled via exit code
+# rather than a variable.
+pin_setuptools() {
+    if python3 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    elif python3 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet --break-system-packages setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    elif command -v python3.9 >/dev/null 2>&1 && python3.9 -m pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    elif command -v pip3 >/dev/null 2>&1 && pip3 install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    elif command -v pip >/dev/null 2>&1 && pip install --quiet setuptools==59.6.0 > /dev/null 2>>"$SETUPTOOLS_LOG"; then
+        return 0
+    fi
+    return 1
+}
 
-if [ "$setuptools_pinned" = true ]; then
+if show_progress "📌 Pinning setuptools to 59.6.0" "pin_setuptools" 3 600; then
     print_success "setuptools pinned to 59.6.0"
 else
     print_warning "setuptools pin failed — continuing anyway (may cause Klipper venv issues)"

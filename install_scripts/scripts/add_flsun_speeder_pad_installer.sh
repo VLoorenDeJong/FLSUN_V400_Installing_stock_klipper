@@ -8,6 +8,36 @@ print_success() { printf "\033[32m✅ %s\033[0m\n" "$1"; }
 print_warning() { printf "\033[33m⚠️  %s\033[0m\n" "$1"; }
 print_error()   { printf "\033[31m❌ %s\033[0m\n" "$1"; }
 
+# Inline show_progress function (always used)
+show_progress() {
+    local message="$1"
+    local command="$2"
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    printf "\033[34m%s\033[0m\n" "$message"
+    eval "$command" &
+    local cmd_pid=$!
+    local start_time
+    start_time=$(date +%s)
+    while kill -0 $cmd_pid 2>/dev/null; do
+        printf "."
+        sleep "$interval"
+        local current_time
+        current_time=$(date +%s)
+        if (( current_time - start_time > timeout )); then
+            printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
+            kill -TERM $cmd_pid 2>/dev/null || true
+            sleep 2
+            kill -KILL $cmd_pid 2>/dev/null || true
+            return 1
+        fi
+    done
+    wait $cmd_pid 2>/dev/null
+    local exit_code=$?
+    printf "\n"
+    return $exit_code
+}
+
 INSTALLER_URL="https://raw.githubusercontent.com/Guilouz/Klipper-Flsun-Speeder-Pad/main/Downloads/sp_installer1.sh"
 STATE_DIR="/var/lib/linuxsetups"
 STATE_FILE="${STATE_DIR}/flsun_speeder_pad_installer.done"
@@ -26,9 +56,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
-    print_status "Installing curl"
-    apt-get update -qq
-    apt-get install -y -qq curl
+    show_progress "📦 Installing curl" "apt-get update -qq && apt-get install -y -qq curl" 3 600
 fi
 
 TARGET_USER="${SUDO_USER:-}"
