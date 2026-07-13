@@ -71,6 +71,8 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     "add_network_manager.sh"
     "install_wifi_toggle_service.sh"          # Install the timed WiFi toggle service (Network manager causes WiFi instability, this will keep that minimized)
+    "configure_motd_services.sh"          # Restore stock Ubuntu dynamic MOTD (generic, reusable across any Linux setup)
+    "configure_klipper_motd_services.sh"  # auto-detect klipper/moonraker/KlipperScreen for MOTD status (needs configure_motd_services.sh's 60-guiderails-extras to actually display it)
     # Print Phase 1 completion message before network disruption
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
     "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
@@ -95,6 +97,7 @@ PHASE2_SCRIPTS=(
     "restore_flsun_configs.sh"            # restore Guilouz configs for Klipper, Moonraker, Mainsail, and KlipperScreen
     "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "add_flsun_theme.sh"                  # copy custom theme files to Mainsail
+    "configure_klipper_motd_services.sh"  # real chance to detect klipper/moonraker/KlipperScreen now they exist (Phase 1's early run is a harmless no-op until then)
 )
 
 # Optional extras (shown as checklist in Phase 2 and standalone menu)
@@ -133,7 +136,8 @@ run_script() {
         updates_install_and_clean.sh|update_kernel.sh|upgrade_distro.sh|\
         add_network_manager.sh|add_flsun_speeder_pad_installer.sh|\
         add_flsun_sp_installer2.sh|add_kiauh.sh|add_webmin.sh|\
-        add_apache_webserver.sh|add_smb.sh|install_python39.sh|fix_klipper_venv.sh)
+        add_apache_webserver.sh|add_smb.sh|install_python39.sh|fix_klipper_venv.sh|\
+        configure_motd_services.sh)
             run_lock_fix ;;
     esac
 
