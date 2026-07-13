@@ -14,6 +14,7 @@ fi
 SLEEP_TIME=0.250                     # Sleep time in seconds (supports milliseconds)
 MAX_LINES=1000
 BASE_NAME="wifi-toggle"
+RETENTION_DAYS=7                     # Rotated/daily log files older than this get deleted
 
 # Timestamp formats (modifiable)
 TS_FORMAT="%Y_%m_%d_%H-%M"           # Example: 2026_06_27_16-15
@@ -39,6 +40,17 @@ LOGFILE="$LOG_DIR/${TODAY}_${BASE_NAME}.log"
 # Ensure log file exists
 if [ ! -f "$LOGFILE" ]; then
     touch "$LOGFILE"
+fi
+
+# ==========================
+# LOG RETENTION (avoid unbounded disk growth from rollover files)
+# ==========================
+# Scoped tightly to this one directory (-maxdepth 1) and only regular files
+# matching this script's own naming pattern, so it can never wander into
+# unrelated files even if LOG_DIR were ever misconfigured.
+DELETED_COUNT=$(find "$LOG_DIR" -maxdepth 1 -type f -name "*_${BASE_NAME}.log" -mtime +"$RETENTION_DAYS" -print -delete 2>/dev/null | wc -l)
+if [ "$DELETED_COUNT" -gt 0 ]; then
+    echo "[$(date)] Log retention: removed $DELETED_COUNT file(s) older than ${RETENTION_DAYS} days" >> "$LOGFILE"
 fi
 
 # ==========================

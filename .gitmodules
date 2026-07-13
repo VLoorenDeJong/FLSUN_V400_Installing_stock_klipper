@@ -1,0 +1,3 @@
+[submodule ".claude/guiderails"]
+	path = .claude/guiderails
+	url = https://github.com/VLoorenDeJong/Guiderails.git
