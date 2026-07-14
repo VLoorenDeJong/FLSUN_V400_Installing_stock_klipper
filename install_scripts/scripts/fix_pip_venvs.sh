@@ -84,14 +84,29 @@ if [ -z "$BUNDLED_DIR" ] || [ ! -d "$BUNDLED_DIR" ]; then
     had_issues=true
 else
     OLD_PIP_WHEEL=$(find "$BUNDLED_DIR" -name "pip-*.whl" | sort -V | tail -1)
+    OLD_VER=""
     if [ -n "$OLD_PIP_WHEEL" ]; then
         OLD_VER=$(basename "$OLD_PIP_WHEEL" | sed 's/pip-\([^-]*\)-.*/\1/')
         print_status "Current bundled pip version: $OLD_VER"
     fi
 
+    # Only pip < 21 has the toml-0.10 parser bug. Newer pip needs no patch.
+    # Skipping also avoids the risk handled by the smoke test below.
+    if [ -n "$OLD_VER" ] && [ "$(printf '%s\n' 21 "$OLD_VER" | sort -V | head -1)" = "21" ]; then
+        print_success "Bundled pip $OLD_VER is new enough — ensurepip patch not needed."
+    else
+
+    # Some Python builds hardcode the bundled wheel filename in ensurepip.
+    # Replacing the wheel then breaks EVERY new venv (venv → ensurepip →
+    # file not found). So: test venv creation before and after the patch,
+    # and roll back the wheel swap if the patch broke it.
+    SMOKE_DIR=$(mktemp -d)
+    PRE_VENV_OK=true
+    python3 -m venv "$SMOKE_DIR/pre" >/dev/null 2>&1 || PRE_VENV_OK=false
+
     # Download newer pip wheel into a temp dir
     TMP_DIR=$(mktemp -d)
-    trap 'rm -rf "$TMP_DIR"' EXIT
+    trap 'rm -rf "$TMP_DIR" "$SMOKE_DIR"' EXIT
 
     if show_progress "📥 Downloading newer pip wheel" \
         "python3 -m pip download pip --no-deps --dest '$TMP_DIR' --quiet 2>/dev/null" 3 300; then
@@ -105,8 +120,26 @@ else
             if [ -n "$OLD_PIP_WHEEL" ] && [ "$(basename "$OLD_PIP_WHEEL")" != "$(basename "$NEW_PIP_WHEEL")" ]; then
                 rm -f "$OLD_PIP_WHEEL"
             fi
-            print_success "ensurepip pip upgraded: $OLD_VER → $NEW_VER"
-            print_warning "Backup saved as: ${OLD_PIP_WHEEL}.bak"
+
+            # Smoke test: does venv creation still work after the swap?
+            if python3 -m venv "$SMOKE_DIR/post" >/dev/null 2>&1; then
+                print_success "ensurepip pip upgraded: $OLD_VER → $NEW_VER"
+                print_warning "Backup saved as: ${OLD_PIP_WHEEL}.bak"
+            elif [ "$PRE_VENV_OK" = true ]; then
+                print_warning "venv creation broke after patch — rolling back wheel swap."
+                if [ -n "$OLD_PIP_WHEEL" ]; then
+                    cp "${OLD_PIP_WHEEL}.bak" "$OLD_PIP_WHEEL"
+                fi
+                if [ -z "$OLD_PIP_WHEEL" ] || [ "$(basename "$OLD_PIP_WHEEL")" != "$(basename "$NEW_PIP_WHEEL")" ]; then
+                    rm -f "${BUNDLED_DIR}/$(basename "$NEW_PIP_WHEEL")"
+                fi
+                print_warning "Original bundled pip restored — new venvs work again."
+                had_issues=true
+            else
+                print_warning "venv creation fails, but it already failed before the patch."
+                print_warning "Keeping new wheel. Investigate python3-venv separately."
+                had_issues=true
+            fi
         else
             print_warning "Downloaded wheel not found — ensurepip patch skipped."
             had_issues=true
@@ -114,6 +147,8 @@ else
     else
         print_warning "pip download failed (no internet?) — ensurepip patch skipped."
         had_issues=true
+    fi
+
     fi
 fi
 
@@ -126,6 +161,7 @@ VENV_DIRS=(
     "${TARGET_HOME}/klippy-env"
     "${TARGET_HOME}/mainsail-env"
     "${TARGET_HOME}/KlipperScreen-env"
+    "${TARGET_HOME}/.KlipperScreen-env"
     "${TARGET_HOME}/crowsnest-env"
     "${TARGET_HOME}/moonraker-telegram-bot-env"
 )
@@ -134,6 +170,28 @@ any_upgraded=false
 for venv in "${VENV_DIRS[@]}"; do
     py_bin="${venv}/bin/python"
     pip_bin="${venv}/bin/pip"
+
+    # Validate venv completeness first. A failed ensurepip leaves a
+    # half-made venv: python may work, but activate/pyvenv.cfg are
+    # missing. Patching pip into such a venv only hides the damage —
+    # Moonraker still rejects it as an invalid virtualenv. Warn and
+    # skip instead; the owner must recreate it.
+    if [ -d "$venv" ]; then
+        if [ ! -x "$py_bin" ] && [ ! -x "$pip_bin" ]; then
+            print_warning "$(basename "$venv") has no working python/pip — half-made venv."
+            print_warning "Recreate it: rm -rf '$venv' && python3 -m venv '$venv'"
+            print_warning "Then reinstall its requirements (see its project's README)."
+            had_issues=true
+            continue
+        fi
+        if [ ! -f "${venv}/bin/activate" ] || [ ! -f "${venv}/pyvenv.cfg" ]; then
+            print_warning "$(basename "$venv") is incomplete (missing activate or pyvenv.cfg)."
+            print_warning "Recreate it: rm -rf '$venv' && python3 -m venv '$venv'"
+            print_warning "Then reinstall its requirements (see its project's README)."
+            had_issues=true
+            continue
+        fi
+    fi
 
     if [ -x "$py_bin" ]; then
         py_major=$(sudo -u "$TARGET_USER" "$py_bin" -c 'import sys; print(sys.version_info[0])' 2>/dev/null || echo "0")

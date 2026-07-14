@@ -71,8 +71,6 @@ PHASE1_SCRIPTS=(
     "configure_locale_and_wifi_country.sh"
     "add_network_manager.sh"
     "install_wifi_toggle_service.sh"          # Install the timed WiFi toggle service (Network manager causes WiFi instability, this will keep that minimized)
-    "configure_motd_services.sh"          # Restore stock Ubuntu dynamic MOTD (generic, reusable across any Linux setup)
-    "configure_klipper_motd_services.sh"  # auto-detect klipper/moonraker/KlipperScreen for MOTD status (needs configure_motd_services.sh's 60-guiderails-extras to actually display it)
     # Print Phase 1 completion message before network disruption
     "mark_phase1_complete.sh"              # Mark Phase 1 as complete
     "add_flsun_speeder_pad_installer.sh"  # Guilouz sp_installer1 — reboots the system!
@@ -97,15 +95,20 @@ PHASE2_SCRIPTS=(
     "restore_flsun_configs.sh"            # restore Guilouz configs for Klipper, Moonraker, Mainsail, and KlipperScreen
     "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "add_flsun_theme.sh"                  # copy custom theme files to Mainsail
-    "configure_klipper_motd_services.sh"  # real chance to detect klipper/moonraker/KlipperScreen now they exist (Phase 1's early run is a harmless no-op until then)
 )
 
-# Optional extras (shown as checklist in Phase 2 and standalone menu)
-declare -A OPTIONAL_LABELS=(
+# Optional extras (shown as checklists before each phase's final steps)
+declare -A PHASE1_OPTIONAL_LABELS=(
+    ["configure_motd_services.sh"]="MOTD restore (stock Ubuntu dynamic login banner)"
+)
+PHASE1_OPTIONAL_ORDER=("configure_motd_services.sh")
+
+declare -A PHASE2_OPTIONAL_LABELS=(
+    ["configure_klipper_motd_services.sh"]="MOTD Klipper status (needs MOTD restore from Phase 1)"
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
 )
-OPTIONAL_ORDER=("add_webmin.sh" "add_smb.sh")
+PHASE2_OPTIONAL_ORDER=("configure_klipper_motd_services.sh" "add_webmin.sh" "add_smb.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -186,11 +189,16 @@ run_sequence() {
     return 0
 }
 
- # Show a numbered checklist and return selected script names in SELECTED array
+ # Show a numbered checklist and return selected script names in SELECTED array.
+ # Args: $1 = name of an associative array (script -> label), $2 = name of the
+ # ordered index array of script names. Uses namerefs so the same checklist UI
+ # can back both phases' independent optional-extras lists.
 optional_checklist() {
+    local -n _labels="$1"
+    local -n _order="$2"
     declare -g -a SELECTED=()
     local toggles=()
-    for s in "${OPTIONAL_ORDER[@]}"; do toggles+=("on"); done
+    for s in "${_order[@]}"; do toggles+=("on"); done
 
     while true; do
         echo ""
@@ -198,11 +206,11 @@ optional_checklist() {
         echo "Optional extras are additional tools. The main install works without them."
         echo "These extras run before the final reboot."
         echo ""
-        for i in "${!OPTIONAL_ORDER[@]}"; do
-            local s="${OPTIONAL_ORDER[$i]}"
+        for i in "${!_order[@]}"; do
+            local s="${_order[$i]}"
             local mark="\e[37m[ ]\e[0m"
             [[ "${toggles[$i]}" == "on" ]] && mark="\e[92m[x]\e[0m"
-            printf "  %d) %b %s\n" "$((i+1))" "$mark" "${OPTIONAL_LABELS[$s]}"
+            printf "  %d) %b %s\n" "$((i+1))" "$mark" "${_labels[$s]}"
         done
         echo ""
         echo "Commands:"
@@ -220,7 +228,7 @@ optional_checklist() {
             "") break ;;
             [0-9]*)
                 local idx=$((opt-1))
-                if [[ idx -ge 0 && idx -lt ${#OPTIONAL_ORDER[@]} ]]; then
+                if [[ idx -ge 0 && idx -lt ${#_order[@]} ]]; then
                     [[ "${toggles[idx]}" == "on" ]] && toggles[idx]="off" || toggles[idx]="on"
                 else
                     echo -e "\e[33m⚠️  Invalid number\e[0m"
@@ -229,15 +237,26 @@ optional_checklist() {
         esac
     done
 
-    for i in "${!OPTIONAL_ORDER[@]}"; do
-        [[ "${toggles[$i]}" == "on" ]] && SELECTED+=("${OPTIONAL_ORDER[$i]}")
+    for i in "${!_order[@]}"; do
+        [[ "${toggles[$i]}" == "on" ]] && SELECTED+=("${_order[$i]}")
     done
+
+    return 0
+}
+# Wrapper for Phase 1 optional extras
+optional_phase1_extras() {
+    if ! optional_checklist PHASE1_OPTIONAL_LABELS PHASE1_OPTIONAL_ORDER; then
+        return 1
+    fi
+
+    # Copy SELECTED → PHASE1_OPTIONAL_SELECTED
+    PHASE1_OPTIONAL_SELECTED=("${SELECTED[@]}")
 
     return 0
 }
 # Wrapper for Phase 2 optional extras
 optional_phase2_extras() {
-    if ! optional_checklist; then
+    if ! optional_checklist PHASE2_OPTIONAL_LABELS PHASE2_OPTIONAL_ORDER; then
         return 1
     fi
 
@@ -337,6 +356,24 @@ while true; do
         1)
             echo -e "\n\e[36m=== Phase 1 — OS Preparation ===\e[0m"
             echo -e "\e[33mTo monitor progress, run:\e[0m sudo tail -F $LOG_FILE"
+
+            echo ""
+            echo -e "\e[36mSelect optional Phase 1 extras:\e[0m"
+            if ! optional_phase1_extras; then
+                echo -e "\e[33m↩️  Returning to main menu...\e[0m"
+                continue
+            fi
+
+            if [[ ${#PHASE1_OPTIONAL_SELECTED[@]} -gt 0 ]]; then
+                echo -e "\n\e[36m=== Phase 1 Optional Extras ===\e[0m"
+                if ! run_sequence "${PHASE1_OPTIONAL_SELECTED[@]}"; then
+                    echo -e "\e[31m❌ Optional extras failed. Returning to main menu for analysis.\e[0m"
+                    continue
+                fi
+            else
+                echo -e "\e[33m⚠️  No optional extras selected.\e[0m"
+            fi
+
             run_phase 1 "${PHASE1_SCRIPTS[@]}"
             ;;
         2)
