@@ -59,6 +59,7 @@ bash "$SCRIPT_DIR/scripts/migrate_phase_markers.sh"
 
 # Phase 1 — OS preparation (ends with reboot)
 PHASE1_SCRIPTS=(
+    "check_shell_syntax.sh"      # Stop early if any script has a syntax error
     "set_scripts_executable.sh"
     "update_password.sh"        # Set new password
     "fix_xauthority.sh"         # Ensures .Xauthority won't hinder the process
@@ -79,6 +80,7 @@ PHASE1_SCRIPTS=(
 
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
+    "check_shell_syntax.sh"      # Stop early if any script has a syntax error
     "set_scripts_executable.sh"
     "cleanup_repositories.sh"
     "install_python.sh"                   # ensure python3.9 + venv tooling before pip/setuptools fixes
@@ -95,6 +97,7 @@ PHASE2_SCRIPTS=(
     "restore_flsun_configs.sh"            # restore Guilouz configs for Klipper, Moonraker, Mainsail, and KlipperScreen
     "configure_printer_settings.sh"       # set up moonraker.conf and printer.cfg for FLSUN V400
     "add_flsun_theme.sh"                  # copy custom theme files to Mainsail
+    "fix_python3_default.sh"              # restore python3 -> 3.10; sp_installer2's 3.9 default breaks apt tooling
 )
 
 # Optional extras (shown as checklists before each phase's final steps)

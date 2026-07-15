@@ -376,5 +376,5 @@ Pull requests are welcome!
 Guidelines:
 - Fork the repo
 - Create a feature branch
-- Make sure your script is valid `check_shell_syntax_all.sh`
+- Make sure your script is valid: `./install_scripts/scripts/check_shell_syntax.sh`
 - Submit a PR with a clear description

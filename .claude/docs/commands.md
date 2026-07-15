@@ -4,10 +4,10 @@ There is no build/lint/test toolchain in the traditional sense. The only checks 
 
 ```shell
 # Syntax-check every .sh file in the repo (bash -n / sh -n), excluding .git/.venv/venv
-./install_scripts/check_shell_syntax_all.sh
+./install_scripts/scripts/check_shell_syntax.sh
 ```
 
-This is also what CI-equivalent review expects before a PR (see README "Contributing"). Run it after editing any script.
+This is also what CI-equivalent review expects before a PR (see README "Contributing"). Run it after editing any script. It also runs on the device, as the first step of every phase in `start_install.sh`.
 
 Running the installer itself requires a real (or test) FLSUN V400 Speeder Pad and root:
 

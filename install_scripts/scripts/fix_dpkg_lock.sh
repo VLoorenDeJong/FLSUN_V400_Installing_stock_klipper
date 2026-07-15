@@ -97,6 +97,20 @@ print_status "Checking for dpkg/lock-frontend and package cache issues..."
 
 # Test if we have a real dpkg lock issue
 if [ "$(check_dpkg_lock)" = "false" ]; then
+    # A lock-free system can still be blocked: a package left half-configured
+    # makes every apt-get install exit 1 (seen with update-notifier-common
+    # after python3 was repointed to 3.9). dpkg --audit reports it.
+    if [ -n "$(run_privileged dpkg --audit 2>/dev/null)" ]; then
+        print_warning "Half-configured packages found. Repairing..."
+        # dpkg TRANSACTION — same rule as Step 4 below: generous 1800s timeout.
+        if show_progress "🔧 Configuring pending packages (dpkg --configure -a)" "run_privileged dpkg --configure -a >/dev/null 2>&1" 5 1800; then
+            print_success "Pending packages configured"
+            exit 0
+        else
+            print_error "Repair failed. Run by hand to see the error: sudo dpkg --configure -a"
+            exit 1
+        fi
+    fi
     print_success "No dpkg lock detected. System is ready for package operations."
     exit 0
 else

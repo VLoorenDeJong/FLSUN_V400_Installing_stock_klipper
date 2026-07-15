@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Auto-detect repo root from this script location.
+# Syntax-checks every .sh file in this repo (bash -n / sh -n).
+# Runs as the first step of every phase. Stops the phase on any error.
+# Also the repo's dev/CI syntax check — run it after editing any script.
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if command -v git >/dev/null 2>&1 && git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
   REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
 else
-  REPO_ROOT="$SCRIPT_DIR"
-  while [ "$REPO_ROOT" != "/" ] && [ ! -d "$REPO_ROOT/.git" ]; do
-    REPO_ROOT="$(dirname "$REPO_ROOT")"
-  done
-
-  if [ ! -d "$REPO_ROOT/.git" ]; then
-    echo "Could not detect repository root from: $SCRIPT_DIR"
-    exit 1
-  fi
+  # No git metadata (bare copy on the device).
+  # Assume the standard layout: <root>/install_scripts/scripts/.
+  REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
 # Skip hidden VCS and common virtual env folders.
@@ -42,11 +39,9 @@ echo
 
 ok_count=0
 err_count=0
-total_count="${#scripts[@]}"
 failed_details=()
 
-for idx in "${!scripts[@]}"; do
-  f="${scripts[$idx]}"
+for f in "${scripts[@]}"; do
   first_line="$(head -n 1 "$f" || true)"
 
   checker="bash"
@@ -56,7 +51,6 @@ for idx in "${!scripts[@]}"; do
 
   if "$checker" -n "$f"; then
     ok_count=$((ok_count + 1))
-    printf '\033[92mOK\033[0m      [%s] %s\n' "$checker" "$f"
   else
     err_count=$((err_count + 1))
     failed_details+=("[$checker] $f")
