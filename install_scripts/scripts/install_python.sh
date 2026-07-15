@@ -118,9 +118,17 @@ mkdir -p "$STATE_DIR"
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$STATE_FILE"
 
 # --- Ensure pip exists ---
+# pypa's default get-pip.py requires Python >= 3.10. Older Pythons
+# (3.8 on Ubuntu 20.04) must use the versioned URL instead.
+GETPIP_URL="https://bootstrap.pypa.io/get-pip.py"
+PYMINOR=$($PYBIN -c 'import sys; print(sys.version_info[1])' 2>/dev/null || echo 10)
+if [ "$PYMINOR" -lt 10 ]; then
+    GETPIP_URL="https://bootstrap.pypa.io/pip/3.${PYMINOR}/get-pip.py"
+    print_warning "Old Python 3.${PYMINOR} — using versioned get-pip URL."
+fi
 if ! $PYBIN -m pip --version >/dev/null 2>&1; then
     show_progress "🔧 Installing pip for $INSTALLED_VER" \
-    "curl -sSLo get-pip.py https://bootstrap.pypa.io/get-pip.py && $PYBIN get-pip.py && rm -f get-pip.py"
+    "curl -sSLo get-pip.py '$GETPIP_URL' && $PYBIN get-pip.py && rm -f get-pip.py"
 fi
 
 # --- Upgrade pip, setuptools, wheel, virtualenv ---

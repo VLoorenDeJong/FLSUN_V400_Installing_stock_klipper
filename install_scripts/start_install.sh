@@ -98,17 +98,18 @@ PHASE2_SCRIPTS=(
 )
 
 # Optional extras (shown as checklists before each phase's final steps)
-declare -A PHASE1_OPTIONAL_LABELS=(
-    ["configure_motd_services.sh"]="MOTD restore (stock Ubuntu dynamic login banner)"
-)
-PHASE1_OPTIONAL_ORDER=("configure_motd_services.sh")
+# Phase 1 has no extras right now. MOTD restore moved to Phase 2:
+# it must run on 22.04, not on the stock 20.04 image.
+declare -A PHASE1_OPTIONAL_LABELS=()
+PHASE1_OPTIONAL_ORDER=()
 
 declare -A PHASE2_OPTIONAL_LABELS=(
-    ["configure_klipper_motd_services.sh"]="MOTD Klipper status (needs MOTD restore from Phase 1)"
+    ["configure_motd_services.sh"]="MOTD restore (stock Ubuntu dynamic login banner)"
+    ["configure_klipper_motd_services.sh"]="MOTD Klipper status (needs MOTD restore above)"
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
 )
-PHASE2_OPTIONAL_ORDER=("configure_klipper_motd_services.sh" "add_webmin.sh" "add_smb.sh")
+PHASE2_OPTIONAL_ORDER=("configure_motd_services.sh" "configure_klipper_motd_services.sh" "add_webmin.sh" "add_smb.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -197,6 +198,12 @@ optional_checklist() {
     local -n _labels="$1"
     local -n _order="$2"
     declare -g -a SELECTED=()
+
+    # Nothing to offer — skip the checklist UI entirely.
+    if [[ ${#_order[@]} -eq 0 ]]; then
+        return 0
+    fi
+
     local toggles=()
     for s in "${_order[@]}"; do toggles+=("on"); done
 
