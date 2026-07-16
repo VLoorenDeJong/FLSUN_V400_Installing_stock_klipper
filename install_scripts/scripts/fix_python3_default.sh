@@ -6,9 +6,14 @@ set -e
 # Guilouz's sp_installer2.sh points python3 at python3.9 (deadsnakes).
 # That breaks every apt tool written in Python: apt_pkg is built for 3.10
 # only, so package postinst scripts fail ("No module named 'apt_pkg'") and
-# apt-get exits 1 until repaired. Klipper is not affected — its venvs carry
-# their own interpreter path. Runs at the end of Phase 2, after everything
-# that expects the 3.9 default.
+# apt-get exits 1 until repaired.
+#
+# WARNING learned the hard way: KIAUH-built venvs are NOT immune. Their
+# bin/python symlinks to the movable /usr/bin/python3 link. Flipping the
+# default to 3.10 hollows out every 3.9 venv (packages live in
+# lib/python3.9). So this script FIRST pins each venv's bin/python to the
+# versioned binary it was built with, THEN repoints the default.
+# Runs at the end of Phase 2, after all venvs exist.
 # =============================================================================
 
 print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
@@ -38,6 +43,42 @@ if [ "$CURRENT" = "$DISTRO_PY" ] && python3 -c "import apt_pkg" >/dev/null 2>&1;
 fi
 
 print_status "python3 currently: ${CURRENT:-unknown} — repointing to $DISTRO_PY"
+
+# --- Pin venv interpreters BEFORE moving the default ---
+# Each venv's bin/python must point at the versioned binary it was built
+# with, not at the movable /usr/bin/python3 link.
+TARGET_USER="${SUDO_USER:-}"
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+    id pi >/dev/null 2>&1 && TARGET_USER="pi" || TARGET_USER="$(whoami)"
+fi
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+
+VENV_DIRS=(
+    "${TARGET_HOME}/klippy-env"
+    "${TARGET_HOME}/klipper-env"
+    "${TARGET_HOME}/moonraker-env"
+    "${TARGET_HOME}/.KlipperScreen-env"
+    "${TARGET_HOME}/KlipperScreen-env"
+    "${TARGET_HOME}/crowsnest-env"
+    "${TARGET_HOME}/moonraker-telegram-bot-env"
+)
+
+for venv in "${VENV_DIRS[@]}"; do
+    pybin="${venv}/bin/python"
+    [ -L "$pybin" ] || continue
+    # The lib/python3.X dir names the version this venv was built with.
+    ver=$(basename "$(find "${venv}/lib" -maxdepth 1 -name "python3*" 2>/dev/null | head -1)")
+    [ -n "$ver" ] || continue
+    versioned="/usr/bin/${ver}"
+    if [ ! -x "$versioned" ]; then
+        print_warning "$versioned not found — cannot pin $(basename "$venv")."
+        continue
+    fi
+    if [ "$(readlink "$pybin")" != "$versioned" ]; then
+        ln -sfn "$versioned" "$pybin"
+        print_success "Pinned $(basename "$venv")/bin/python → $versioned"
+    fi
+done
 
 # Register 3.10 with a higher priority than sp_installer2's 3.9 entry (1),
 # then select it explicitly.

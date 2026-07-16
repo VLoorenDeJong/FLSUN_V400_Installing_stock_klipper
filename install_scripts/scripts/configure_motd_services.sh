@@ -229,10 +229,15 @@ if [ -f "$SERVICES_LIST" ]; then
     printf "\n  Services:\n"
     while IFS= read -r svc; do
         [ -z "$svc" ] && continue
+        # Literal UTF-8 marks: dash's printf has no \x escapes.
         if systemctl is-active --quiet "$svc" 2>/dev/null; then
-            printf "    %-16s \xe2\x97\x8f active\n" "$svc"
+            printf "    %-16s ● active\n" "$svc"
         else
-            printf "    %-16s \xe2\x9c\x97 %s\n" "$svc" "$(systemctl is-active "$svc" 2>/dev/null || echo "not found")"
+            # is-active prints the state AND exits non-zero, so capture
+            # first; only an empty result means the unit is unknown.
+            state="$(systemctl is-active "$svc" 2>/dev/null)"
+            [ -n "$state" ] || state="not found"
+            printf "    %-16s ✗ %s\n" "$svc" "$state"
         fi
     done < "$SERVICES_LIST"
 fi

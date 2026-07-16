@@ -119,6 +119,48 @@ check_dpkg_lock() {
     echo $lock_detected
 }
 
+# Watch-only variant for dpkg TRANSACTIONS. Killing dpkg/apt mid-write
+# corrupts package state, so this never sends a signal. It waits as long
+# as the transaction needs. Output handling matches show_progress.
+show_progress_no_kill() {
+    local message="$1"
+    local command="$2"
+    local interval="${3:-5}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
+    printf "\033[34m%s\033[0m\n" "$message"
+
+    # Debug mode: stream output live.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    eval "$command" >"$log_file" 2>&1 &
+    local cmd_pid=$!
+    while kill -0 $cmd_pid 2>/dev/null; do
+        printf "."
+        sleep "$interval"
+    done
+    wait $cmd_pid 2>/dev/null
+    local exit_code=$?
+    printf "\n"
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
+}
+
 print_status "Checking for dpkg/lock-frontend and package cache issues..."
 
 # Test if we have a real dpkg lock issue
@@ -128,8 +170,8 @@ if [ "$(check_dpkg_lock)" = "false" ]; then
     # after python3 was repointed to 3.9). dpkg --audit reports it.
     if [ -n "$(run_privileged dpkg --audit 2>/dev/null)" ]; then
         print_warning "Half-configured packages found. Repairing..."
-        # dpkg TRANSACTION — same rule as Step 4 below: generous 1800s timeout.
-        if show_progress "🔧 Configuring pending packages (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5 1800; then
+        # dpkg TRANSACTION — watch-only wrapper, never killed (see Step 4).
+        if show_progress_no_kill "🔧 Configuring pending packages (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5; then
             print_success "Pending packages configured"
             exit 0
         else
@@ -183,15 +225,15 @@ print_success "Package cache cleaned"
 
 # Step 4: Configure dpkg
 # NOTE: dpkg --configure -a and apt-get install -f are dpkg TRANSACTIONS — a
-# timeout kill mid-run corrupts package state, so both get a generous 1800s.
-if show_progress "🔧 Configuring dpkg (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5 1800; then
+# timeout kill mid-run corrupts package state. Watch-only wrapper, no kill.
+if show_progress_no_kill "🔧 Configuring dpkg (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5; then
     print_success "dpkg configured"
 else
     print_error "dpkg configuration failed"
 fi
 
 # Step 5: Fix broken dependencies
-if show_progress "🔗 Fixing dependencies (apt-get install -f)" "run_privileged apt-get install -f -qq" 5 1800; then
+if show_progress_no_kill "🔗 Fixing dependencies (apt-get install -f)" "run_privileged apt-get install -f -qq" 5; then
     print_success "Dependencies fixed"
 else
     print_error "Dependency fix failed"

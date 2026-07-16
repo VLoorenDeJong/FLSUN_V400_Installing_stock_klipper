@@ -247,6 +247,13 @@ for unit in systemd-networkd systemd-networkd-wait-online networkd-dispatcher sy
 done
 print_success "Old managers won't auto-start next boot — current connection left untouched."
 
+# wait-online gets pulled in via network-online.target even when disabled,
+# then fails at every boot (networkd no longer manages any links). Mask it.
+# Safe: it is only a boot-time wait, not a network service — masking it can
+# never touch the live WiFi connection.
+systemctl -q mask systemd-networkd-wait-online 2>/dev/null || true
+print_success "Masked systemd-networkd-wait-online (failed-unit noise at boot)."
+
 # 2. Comment out legacy wlan0/eth0 config in /etc/network/interfaces
 IFUPDOWN_CONF="/etc/network/interfaces"
 if [ -f "$IFUPDOWN_CONF" ]; then
