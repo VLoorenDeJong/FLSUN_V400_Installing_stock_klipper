@@ -74,6 +74,11 @@ print_status "Copying theme files into .theme folder..."
 cp -r "$THEME_SOURCE/"* "$THEME_DIR/" 2>/dev/null || true
 print_success "Theme files copied to: $THEME_DIR"
 
+# This script runs as root, so folder + files land root-owned. Moonraker
+# runs as the real user — root-owned files are read-only in the web UI.
+chown -R "$ACTUAL_USER":"$ACTUAL_USER" "$THEME_DIR"
+print_success "Ownership set to $ACTUAL_USER — editable from Mainsail."
+
 echo
 print_success "Theme installation completed."
 echo "➡ You can now select your theme in Mainsail."
