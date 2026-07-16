@@ -59,11 +59,17 @@ This installer relies on the following open‑source projects:
 - **FLSUN** — Original Speeder Pad hardware and base environment  
   https://flsun3d.com
 
-  - **Samba** — File and printer sharing for Linux/Windows networks  
+- **KlipperScreen (Guilouz fork)** — Touchscreen UI for the Speeder Pad  
+  https://github.com/Guilouz/KlipperScreen-Flsun-Speeder-Pad
+
+- **Samba** — File and printer sharing for Linux/Windows networks  
   https://www.samba.org
 
 - **Webmin** — Web-based system administration interface  
   https://webmin.com
+
+- **Ubuntu update-motd** — Dynamic login banner framework (MOTD restore extra)  
+  https://manpages.ubuntu.com/manpages/jammy/man5/update-motd.5.html
 
 
 ## Additional Resources

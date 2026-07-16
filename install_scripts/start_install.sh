@@ -109,10 +109,11 @@ PHASE1_OPTIONAL_ORDER=()
 declare -A PHASE2_OPTIONAL_LABELS=(
     ["configure_motd_services.sh"]="MOTD restore (stock Ubuntu dynamic login banner)"
     ["configure_klipper_motd_services.sh"]="MOTD Klipper status (needs MOTD restore above)"
+    ["configure_led_defaults.sh"]="LED boot defaults (hotend light / logo LED)"
     ["add_webmin.sh"]="Webmin  (web-based admin panel)"
     ["add_smb.sh"]="Samba   (SMB/Windows file sharing)"
 )
-PHASE2_OPTIONAL_ORDER=("configure_motd_services.sh" "configure_klipper_motd_services.sh" "add_webmin.sh" "add_smb.sh")
+PHASE2_OPTIONAL_ORDER=("configure_motd_services.sh" "configure_klipper_motd_services.sh" "configure_led_defaults.sh" "add_webmin.sh" "add_smb.sh")
 
 # =============================================================================
 # HELPER FUNCTIONS
