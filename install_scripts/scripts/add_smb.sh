@@ -51,38 +51,56 @@ done
 show_progress() {
     local message="$1"
     local command="$2"
-    local interval="${3:-3}"  # Default 3 seconds between dots
-    local timeout="${4:-600}"  # Default 10 minute timeout
-
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
 
-    # Start the command in background
-    eval "$command" &
-    local cmd_pid=$!
-    local start_time=$(date +%s)
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
 
-    # Show progress dots while command runs (with timeout)
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
+    local cmd_pid=$!
+    local start_time
+    start_time=$(date +%s)
     while kill -0 $cmd_pid 2>/dev/null; do
         printf "."
-        sleep $interval
-
-        # Check for timeout
-        local current_time=$(date +%s)
+        sleep "$interval"
+        local current_time
+        current_time=$(date +%s)
         if (( current_time - start_time > timeout )); then
-            printf "\n\033[31m❌ Command timed out after ${timeout} seconds\033[0m\n"
+            printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
-
-    # Wait for command to complete and get exit code
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
-
-    printf "\n"  # New line after dots
-    return $exit_code
+    printf "\n"
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 print_status "Setting up Samba..."
@@ -189,8 +207,8 @@ fi
 # Install required packages
 if ! dpkg -s samba &> /dev/null; then
     print_status "Installing Samba packages..."
-    if show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"; then
-        if show_progress "📁 Installing Samba server packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq samba samba-common-bin >/dev/null 2>&1"; then
+    if show_progress "📦 Updating package lists" "sudo apt-get update -qq"; then
+        if show_progress "📁 Installing Samba server packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq samba samba-common-bin"; then
             print_success "Samba packages installed successfully"
             sleep 2 # Short delay to ensure services are ready
         else
@@ -209,7 +227,7 @@ if ! dpkg -s smbclient &> /dev/null; then
         print_error "Cannot install smbclient: dpkg lock could not be resolved"
         exit 1
     fi
-    if show_progress "📱 Installing Samba client tools" "sudo apt-get install -y -qq smbclient >/dev/null 2>&1"; then
+    if show_progress "📱 Installing Samba client tools" "sudo apt-get install -y -qq smbclient"; then
         print_success "Samba client installed successfully"
     else
         print_error "Failed to install Samba client"
@@ -220,7 +238,7 @@ fi
 # Configure services
 print_status "Configuring Samba services..."
 if ! systemctl is-active --quiet smbd; then
-    if show_progress "🚀 Starting and enabling Samba services" "sudo systemctl enable smbd nmbd >/dev/null 2>&1 && sudo systemctl start smbd nmbd >/dev/null 2>&1"; then
+    if show_progress "🚀 Starting and enabling Samba services" "sudo systemctl enable smbd nmbd && sudo systemctl start smbd nmbd"; then
         if systemctl is-active --quiet smbd && systemctl is-active --quiet nmbd; then
             print_success "Samba services started and enabled"
         else

@@ -7,10 +7,26 @@ export DEBIAN_FRONTEND=noninteractive
 show_progress() {
     local message="$1"
     local command="$2"
-    local interval="${3:-3}"
-    local timeout="${4:-300}"
+    local interval="${3:-5}"
+    local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -24,13 +40,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
@@ -47,17 +73,17 @@ NEW_KERNEL=$(uname -r)
 print_header "Kernel Update"
 print_status "Current kernel: $CURRENT_KERNEL"
 
-show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1" 3 600
+show_progress "📦 Updating package lists" "sudo apt-get update -qq" 3 600
 
 # --force-confnew auto-answers dpkg conffile prompts (e.g. the /etc/sudoers
 # "Y/I/N/O/D/Z" dialog) by installing the package maintainer's version — the
 # "Y/I" option — unattended. NOTE: confnew must NOT be paired with confdef, or
 # confdef's default action (keep current) would win instead.
 show_progress "⬆️  Installing latest kernel and security updates" \
-    "sudo apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq >/dev/null 2>&1" 5 1800
+    "sudo apt-get dist-upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq" 5 1800
 
 show_progress "🧹 Removing old kernels" \
-    "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1" 3 600
+    "sudo apt-get autoremove --purge -y -qq" 3 600
 
 NEW_KERNEL=$(dpkg -l 'linux-image-*' 2>/dev/null | awk '/^ii/ {print $2}' | sed 's/linux-image-//' | sort -V | tail -n 1)
 

@@ -14,8 +14,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -29,13 +45,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 # Function to check and fix DPKG locks (calls dedicated script)
@@ -78,10 +104,10 @@ if ask_user "Do you want to update and upgrade the system?"; then
     # Check and fix any DPKG locks before proceeding with package operations
     check_and_fix_dpkg_lock
 
-    if show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"; then
+    if show_progress "📦 Updating package lists" "sudo apt-get update -qq"; then
         print_success "Package lists updated successfully"
 
-        if show_progress "⬆️ Upgrading system packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq >/dev/null 2>&1"; then
+        if show_progress "⬆️ Upgrading system packages" "sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::=\"--force-confnew\" -qq"; then
             print_success "System upgrade completed successfully"
         else
             print_error "System upgrade failed"
@@ -95,20 +121,20 @@ if ask_user "Do you want to update and upgrade the system?"; then
     # Ask for cleanup confirmation
     if ask_user "Do you want to clean up unused packages?"; then
         # Remove unused packages
-        if show_progress "🗑️ Removing unused packages" "sudo apt-get autoremove -y -qq >/dev/null 2>&1"; then
+        if show_progress "🗑️ Removing unused packages" "sudo apt-get autoremove -y -qq"; then
             print_success "Unused packages removed"
         fi
 
         # Purge leftover configuration files, only if any exist
         leftover_configs=$(dpkg -l | awk '/^rc/ { print $2 }')
         if [ -n "$leftover_configs" ]; then
-            if show_progress "🧹 Removing leftover configurations" "sudo apt-get purge -y -qq $leftover_configs >/dev/null 2>&1"; then
+            if show_progress "🧹 Removing leftover configurations" "sudo apt-get purge -y -qq $leftover_configs"; then
                 print_success "Leftover configurations removed"
             fi
         fi
 
         # Clean up cached packages
-        if show_progress "🧽 Cleaning package cache" "sudo apt-get autoclean -y -qq >/dev/null 2>&1 && sudo apt-get clean -y -qq >/dev/null 2>&1"; then
+        if show_progress "🧽 Cleaning package cache" "sudo apt-get autoclean -y -qq && sudo apt-get clean -y -qq"; then
             print_success "Package cache cleaned"
         fi
 

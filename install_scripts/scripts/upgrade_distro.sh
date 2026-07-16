@@ -8,29 +8,55 @@ show_progress() {
     local message="$1"
     local command="$2"
     local interval="${3:-5}"
-    local timeout="${4:-1800}"
+    local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
-    while kill -0 "$cmd_pid" 2>/dev/null; do
+    while kill -0 $cmd_pid 2>/dev/null; do
         printf "."
         sleep "$interval"
         local current_time
         current_time=$(date +%s)
         if (( current_time - start_time > timeout )); then
             printf "\n\033[31m❌ Command timed out after %d seconds\033[0m\n" "$timeout"
-            kill -TERM "$cmd_pid" 2>/dev/null || true
+            kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
-            kill -KILL "$cmd_pid" 2>/dev/null || true
+            kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
-    wait "$cmd_pid" 2>/dev/null
+    wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 print_status()  { printf "\033[34m🔧 %s\033[0m\n" "$1"; }
@@ -47,7 +73,23 @@ run_with_log_progress() {
     local command="$1"
     local log_file="$2"
     local poll="${3:-10}"
-    eval "$command" &
+    local out_log
+    out_log=$(mktemp /tmp/progress.XXXXXX.log)
+
+    # Debug mode: stream output live. Still watch-only, never killed.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$out_log"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$out_log"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$out_log"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output. Watch the external log for progress.
+    eval "$command" >"$out_log" 2>&1 &
     local cmd_pid=$!
     local last_line="" cur_line
     while kill -0 "$cmd_pid" 2>/dev/null; do
@@ -63,6 +105,13 @@ run_with_log_progress() {
     printf "\n"
     local exit_code=0
     wait "$cmd_pid" || exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$out_log"
+        printf "\033[33mFull log: %s\033[0m\n" "$out_log"
+    else
+        rm -f "$out_log"
+    fi
     return $exit_code
 }
 
@@ -115,7 +164,7 @@ fi
 
 if ! command -v do-release-upgrade &>/dev/null; then
     show_progress "🔧 Installing upgrade tool (ubuntu-release-upgrader-core)" \
-        "sudo apt-get install -y -qq ubuntu-release-upgrader-core >/dev/null 2>&1" 3 600
+        "sudo apt-get install -y -qq ubuntu-release-upgrader-core" 3 600
 fi
 
 # --- Confirm ---
@@ -230,14 +279,14 @@ print_status "Conffile prompts will be auto-answered (install maintainer's versi
 
 # --- Step 1: Fully update current system first ---
 print_header "Step 1 of 3 — Update current system"
-show_progress "📦 Updating package lists" "sudo apt-get update -qq >/dev/null 2>&1"
+show_progress "📦 Updating package lists" "sudo apt-get update -qq"
 # dist-upgrade and autoremove are dpkg TRANSACTIONS — killing them mid-flight
 # corrupts package state, so no show_progress timeout here. Watch-only progress
 # from dpkg's own log (one line per package action) instead.
 print_status "⬆️  Applying all current updates (per-package progress below)"
-run_with_log_progress "sudo apt-get dist-upgrade -y -qq >/dev/null 2>&1" "/var/log/dpkg.log" 5
+run_with_log_progress "sudo apt-get dist-upgrade -y -qq" "/var/log/dpkg.log" 5
 print_status "🧹 Cleaning up"
-run_with_log_progress "sudo apt-get autoremove --purge -y -qq >/dev/null 2>&1" "/var/log/dpkg.log" 5
+run_with_log_progress "sudo apt-get autoremove --purge -y -qq" "/var/log/dpkg.log" 5
 print_success "Current system fully updated."
 
 # --- Step 2: Configure upgrade channel ---

@@ -20,8 +20,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -35,13 +51,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 # Check and fix any DPKG locks before proceeding with package operations
@@ -88,9 +114,9 @@ done
 
 if [ ${#NEEDED_PKGS[@]} -gt 0 ]; then
     check_and_fix_dpkg_lock
-    show_progress "📦 Updating package lists" "apt-get update -qq >/dev/null 2>&1" 3 300
+    show_progress "📦 Updating package lists" "apt-get update -qq" 3 300
     show_progress "📦 Installing ${NEEDED_PKGS[*]}" \
-        "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${NEEDED_PKGS[*]} >/dev/null 2>&1" 3 300
+        "DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ${NEEDED_PKGS[*]}" 3 300
     print_success "Installed: ${NEEDED_PKGS[*]}"
 else
     print_success "landscape-common and update-notifier-common already installed"

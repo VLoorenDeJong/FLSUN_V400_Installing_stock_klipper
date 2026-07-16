@@ -11,8 +11,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -26,13 +42,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 # Function to run commands with appropriate privileges
@@ -103,7 +129,7 @@ if [ "$(check_dpkg_lock)" = "false" ]; then
     if [ -n "$(run_privileged dpkg --audit 2>/dev/null)" ]; then
         print_warning "Half-configured packages found. Repairing..."
         # dpkg TRANSACTION — same rule as Step 4 below: generous 1800s timeout.
-        if show_progress "🔧 Configuring pending packages (dpkg --configure -a)" "run_privileged dpkg --configure -a >/dev/null 2>&1" 5 1800; then
+        if show_progress "🔧 Configuring pending packages (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5 1800; then
             print_success "Pending packages configured"
             exit 0
         else
@@ -158,14 +184,14 @@ print_success "Package cache cleaned"
 # Step 4: Configure dpkg
 # NOTE: dpkg --configure -a and apt-get install -f are dpkg TRANSACTIONS — a
 # timeout kill mid-run corrupts package state, so both get a generous 1800s.
-if show_progress "🔧 Configuring dpkg (dpkg --configure -a)" "run_privileged dpkg --configure -a >/dev/null 2>&1" 5 1800; then
+if show_progress "🔧 Configuring dpkg (dpkg --configure -a)" "run_privileged dpkg --configure -a" 5 1800; then
     print_success "dpkg configured"
 else
     print_error "dpkg configuration failed"
 fi
 
 # Step 5: Fix broken dependencies
-if show_progress "🔗 Fixing dependencies (apt-get install -f)" "run_privileged apt-get install -f -qq >/dev/null 2>&1" 5 1800; then
+if show_progress "🔗 Fixing dependencies (apt-get install -f)" "run_privileged apt-get install -f -qq" 5 1800; then
     print_success "Dependencies fixed"
 else
     print_error "Dependency fix failed"

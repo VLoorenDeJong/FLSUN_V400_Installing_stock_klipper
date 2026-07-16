@@ -28,8 +28,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -43,13 +59,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 had_issues=false
@@ -109,7 +135,7 @@ else
     trap 'rm -rf "$TMP_DIR" "$SMOKE_DIR"' EXIT
 
     if show_progress "📥 Downloading newer pip wheel" \
-        "python3 -m pip download pip --no-deps --dest '$TMP_DIR' --quiet 2>/dev/null" 3 300; then
+        "python3 -m pip download pip --no-deps --dest '$TMP_DIR' --quiet" 3 300; then
         NEW_PIP_WHEEL=$(find "$TMP_DIR" -name "pip-*.whl" | sort -V | tail -1)
         if [ -n "$NEW_PIP_WHEEL" ]; then
             NEW_VER=$(basename "$NEW_PIP_WHEEL" | sed 's/pip-\([^-]*\)-.*/\1/')
@@ -205,7 +231,7 @@ for venv in "${VENV_DIRS[@]}"; do
         if ! sudo -u "$TARGET_USER" "$py_bin" -m pip --version >/dev/null 2>&1; then
             print_warning "pip module missing in $(basename "$venv") — attempting ensurepip bootstrap"
             show_progress "🧰 Bootstrapping pip via ensurepip in $(basename "$venv")" \
-                "sudo -u '$TARGET_USER' '$py_bin' -m ensurepip --upgrade --default-pip >/dev/null 2>&1" 3 600 || true
+                "sudo -u '$TARGET_USER' '$py_bin' -m ensurepip --upgrade --default-pip" 3 600 || true
         fi
 
         if show_progress "⬆️  Upgrading pip in $(basename "$venv")" \

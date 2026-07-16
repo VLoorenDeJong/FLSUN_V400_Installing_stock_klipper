@@ -21,8 +21,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -36,13 +52,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 # --- DPKG lock fixer (copied exactly) ---
@@ -94,13 +120,13 @@ print_header "Install latest supported Python 3.x + venv + distutils"
 print_status "Ensuring the distribution default python3 + venv + dev tooling..."
 
 show_progress "🔧 Installing python3 + venv + dev" \
-"sudo apt-get install -y python3 python3-venv python3-dev -qq >/dev/null 2>&1"
+"sudo apt-get install -y python3 python3-venv python3-dev -qq"
 
 # distutils only where it still exists (removed from Python 3.12+); guard it so a
 # missing package can never abort the install.
 if apt-cache show python3-distutils >/dev/null 2>&1; then
     show_progress "🔧 Installing python3-distutils" \
-    "sudo apt-get install -y python3-distutils -qq >/dev/null 2>&1"
+    "sudo apt-get install -y python3-distutils -qq"
 else
     print_warning "python3-distutils not available on this release (Python 3.12+) — skipping."
 fi

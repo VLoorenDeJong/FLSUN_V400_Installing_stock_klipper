@@ -18,8 +18,24 @@ show_progress() {
     local command="$2"
     local interval="${3:-5}"
     local timeout="${4:-600}"
+    local log_file
+    log_file=$(mktemp /tmp/progress.XXXXXX.log)
     printf "\033[34m%s\033[0m\n" "$message"
-    eval "$command" &
+
+    # Debug mode: stream output live. No dots, no kill timer.
+    if [ "${FLSUN_DEBUG:-0}" = "1" ]; then
+        eval "$command" 2>&1 | tee "$log_file"
+        local exit_code=${PIPESTATUS[0]}
+        if [ "$exit_code" -eq 0 ]; then
+            rm -f "$log_file"
+        else
+            printf "\033[31m❌ Command failed (exit %s). Full log: %s\033[0m\n" "$exit_code" "$log_file"
+        fi
+        return "$exit_code"
+    fi
+
+    # Normal mode: capture output to the log. Show dots.
+    eval "$command" >"$log_file" 2>&1 &
     local cmd_pid=$!
     local start_time
     start_time=$(date +%s)
@@ -33,13 +49,23 @@ show_progress() {
             kill -TERM $cmd_pid 2>/dev/null || true
             sleep 2
             kill -KILL $cmd_pid 2>/dev/null || true
+            printf "\033[31mLast output before timeout:\033[0m\n"
+            tail -n 20 "$log_file"
+            printf "\033[33mFull log: %s\033[0m\n" "$log_file"
             return 1
         fi
     done
     wait $cmd_pid 2>/dev/null
     local exit_code=$?
     printf "\n"
-    return $exit_code
+    if [ "$exit_code" -ne 0 ]; then
+        printf "\033[31m❌ Command failed (exit %s). Last output:\033[0m\n" "$exit_code"
+        tail -n 20 "$log_file"
+        printf "\033[33mFull log: %s\033[0m\n" "$log_file"
+    else
+        rm -f "$log_file"
+    fi
+    return "$exit_code"
 }
 
 # Function to check and fix DPKG locks (calls dedicated script)
@@ -135,11 +161,11 @@ diagnose_apt_system
 
 # Install dependencies
 print_status "Installing required dependencies..."
-if show_progress "📦 Updating package lists" "timeout 600 sudo apt-get update -qq --fix-missing >/dev/null 2>&1" 3 600; then
+if show_progress "📦 Updating package lists" "timeout 600 sudo apt-get update -qq --fix-missing" 3 600; then
     print_success "Package lists updated successfully"
 else
     print_warning "apt-get update failed, trying apt update..."
-    if show_progress "📦 Updating package lists (alternative method)" "timeout 600 sudo apt update -qq >/dev/null 2>&1" 3 600; then
+    if show_progress "📦 Updating package lists (alternative method)" "timeout 600 sudo apt update -qq" 3 600; then
         print_success "Package lists updated successfully (alternative method)"
     else
         print_error "Failed to update package lists"
@@ -150,12 +176,12 @@ else
     fi
 fi
 
-if show_progress "�🔧 Installing dependencies" "timeout 300 sudo apt-get install -y -qq --no-install-recommends curl gnupg software-properties-common apt-transport-https ca-certificates >/dev/null 2>&1" 2 300; then
+if show_progress "�🔧 Installing dependencies" "timeout 300 sudo apt-get install -y -qq --no-install-recommends curl gnupg software-properties-common apt-transport-https ca-certificates" 2 300; then
     print_success "Dependencies installed successfully"
 else
     print_warning "Standard installation failed, trying alternative method..."
     # Try with apt instead of apt-get
-    if show_progress "🔧 Installing dependencies (alternative method)" "timeout 300 sudo apt install -y -qq --no-install-recommends curl gnupg software-properties-common apt-transport-https ca-certificates >/dev/null 2>&1" 2 300; then
+    if show_progress "🔧 Installing dependencies (alternative method)" "timeout 300 sudo apt install -y -qq --no-install-recommends curl gnupg software-properties-common apt-transport-https ca-certificates" 2 300; then
         print_success "Dependencies installed successfully (alternative method)"
     else
         print_error "Failed to install dependencies"
@@ -172,11 +198,11 @@ setup_official_webmin_repo() {
     
     # Download and run the official Webmin repository setup script
     cd /tmp
-    if show_progress "📥 Downloading official repository setup script" "curl --max-time 30 -fsSL https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh -o webmin-setup-repo.sh 2>/dev/null" 2 60; then
+    if show_progress "📥 Downloading official repository setup script" "curl --max-time 30 -fsSL https://raw.githubusercontent.com/webmin/webmin/master/webmin-setup-repo.sh -o webmin-setup-repo.sh" 2 60; then
         print_status "Downloaded official Webmin repository setup script"
         
         # Run the official setup script with force flag to avoid prompts
-        if show_progress "⚙️ Configuring official Webmin repository" "bash webmin-setup-repo.sh --force >/dev/null 2>&1"; then
+        if show_progress "⚙️ Configuring official Webmin repository" "bash webmin-setup-repo.sh --force"; then
             print_success "Official Webmin repository configured successfully"
             rm -f webmin-setup-repo.sh
             return 0
@@ -201,7 +227,7 @@ setup_manual_webmin_repo() {
     
     # Download the modern Webmin developers key (post-DSA-1024)
     print_status "Adding modern Webmin developers GPG key..."
-    if show_progress "🔑 Downloading and installing GPG key" "curl --max-time 30 -fsSL https://download.webmin.com/developers-key.asc 2>/dev/null | gpg --dearmor 2>/dev/null | sudo tee /usr/share/keyrings/webmin-developers.gpg >/dev/null 2>&1" 2 60; then
+    if show_progress "🔑 Downloading and installing GPG key" "curl --max-time 30 -fsSL https://download.webmin.com/developers-key.asc | gpg --dearmor | sudo tee /usr/share/keyrings/webmin-developers.gpg" 2 60; then
         print_success "Modern Webmin developers key added successfully"
         
         # Add the official Webmin repository with modern newkey path
@@ -239,8 +265,8 @@ install_webmin_snap() {
 install_webmin_deb() {
     print_status "Attempting direct .deb installation..."
     cd /tmp
-    if show_progress "📥 Downloading Webmin .deb package" "wget --timeout=30 -q https://download.webmin.com/download/deb/webmin-current.deb 2>/dev/null" 2 60; then
-        if show_progress "📦 Installing Webmin from .deb package" "sudo dpkg -i webmin-current.deb >/dev/null 2>&1"; then
+    if show_progress "📥 Downloading Webmin .deb package" "wget --timeout=30 -q https://download.webmin.com/download/deb/webmin-current.deb" 2 60; then
+        if show_progress "📦 Installing Webmin from .deb package" "sudo dpkg -i webmin-current.deb"; then
             # Fix any dependency issues
             timeout 120 sudo apt-get install -f -y -qq --fix-missing >/dev/null 2>&1
             rm -f webmin-current.deb
@@ -290,7 +316,7 @@ else
 fi
 
 print_status "Updating package lists with new repository..."
-if ! show_progress "📦 Updating package lists with Webmin repository" "timeout 600 sudo apt-get update -qq --fix-missing >/dev/null 2>&1" 3 600; then
+if ! show_progress "📦 Updating package lists with Webmin repository" "timeout 600 sudo apt-get update -qq --fix-missing" 3 600; then
     print_warning "Package list update failed, but continuing with installation attempt..."
 fi
 
@@ -298,7 +324,7 @@ print_status "Installing Webmin package..."
 print_status "Webmin is a large package - this may take several minutes..."
 
 # Try repository installation first with longer timeout
-if show_progress "🌐 Installing Webmin from repository" "timeout 1800 sudo apt-get install -y -qq --no-install-recommends webmin >/dev/null 2>&1" 5 1800; then
+if show_progress "🌐 Installing Webmin from repository" "timeout 1800 sudo apt-get install -y -qq --no-install-recommends webmin" 5 1800; then
     print_success "Webmin installed successfully via repository"
     # Skip to configuration since repository installation succeeded
     print_status "Proceeding with Webmin configuration..."
