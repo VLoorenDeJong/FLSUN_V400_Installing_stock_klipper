@@ -137,7 +137,15 @@ Automated install support in 2 phases for:
 
 1. Log in to your Speeder Pad (SSH).
 - [MobaXterm (recommended)](https://mobaxterm.mobatek.net/download.html)
-  
+
+<br/>
+
+Username: <b>pi</b >
+<br/>
+Password: <b> flsun</b>
+
+<br />
+
 2. Make sure you have Git:
 
 <br/>
