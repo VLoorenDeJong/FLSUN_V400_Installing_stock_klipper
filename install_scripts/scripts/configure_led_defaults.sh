@@ -43,9 +43,7 @@ get_value() {
     local name="$1"
     awk -v sec="[output_pin ${name}]" '
         $0 == sec { insec = 1; next }
-        insec && /^
-
-\[/ { insec = 0 }
+        insec && /^\[/ { insec = 0 }
         insec && /^value:/ { gsub(/[^01]/, ""); print; exit }
     ' "$PRINTER_CFG"
 }
@@ -53,13 +51,7 @@ get_value() {
 # Set the 'value:' inside one [output_pin <name>] section.
 set_value() {
     local name="$1" newval="$2"
-    sed -i "/^
-
-\[output_pin ${name}\]
-
-/,/^
-
-\[/ s/^value:.*/value: ${newval}/" "$PRINTER_CFG"
+    sed -i "/^\[output_pin ${name}\]/,/^\[/ s/^value:.*/value: ${newval}/" "$PRINTER_CFG"
 }
 
 # Ask on/off for one LED. Prompts on /dev/tty.
