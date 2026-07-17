@@ -14,6 +14,7 @@
   - [Phase 1 prompt suggestions](#phase-1-prompt-suggestions)
 - [After reboot run phase 2:](#after-reboot-run-phase-2)
   - [Phase 2 prompt suggestions](#phase-2-prompt-suggestions)
+  - [](#)
 - [Install Git (if needed)](#install-git-if-needed)
 - [Success Checklist](#success-checklist)
   - [After Phase 1:](#after-phase-1)
@@ -332,6 +333,12 @@ Automated install support in 2 phases for:
 <br/>
 
 ![KIAUH install Mainsail](ReadmeFiles/image-26.png)
+
+<br/>
+---
+<br/>
+
+![KIAUH install Mainsail](ReadmeFiles/image-27.png)
 
 <br/>
 
