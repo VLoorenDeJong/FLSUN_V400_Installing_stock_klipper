@@ -309,6 +309,32 @@ Automated install support in 2 phases for:
 
 ---
 <br/>
+
+![KIAUH install Mainsail](ReadmeFiles/image-23.png)
+
+<br/>
+
+---
+<br/>
+
+![KIAUH install Mainsail](ReadmeFiles/image-24.png)
+
+<br/>
+
+---
+<br/>
+
+![KIAUH install Mainsail](ReadmeFiles/image-25.png)
+
+<br/>
+
+---
+<br/>
+
+![KIAUH install Mainsail](ReadmeFiles/image-26.png)
+
+<br/>
+
 </details>
 
 # Install Git (if needed)
@@ -329,7 +355,7 @@ sudo apt update && sudo apt install git && git --version
 
 ## After Phase 2:
 - Klipper running (`systemctl status klipper`)
-- Moonraker running (`systemcthttps://github.com/VLoorenDeJong/FLSUN_V400_Installing_stock_klipperl status moonraker`)
+- Moonraker running (`systemctl status moonraker`)
 - Mainsail accessible in browser
 - Printer profile selected
 - USB symlink `/dev/printer` exists
@@ -346,8 +372,11 @@ sudo apt update && sudo apt install git && git --version
 
 # Disabling scripts
 To skip a certain step comment out the script in `install_scripts\start_install.sh` with `#` in front of the line
+
 <details>
+
 ![start_install.sh](ReadmeFiles/image-9.png)
+
 </details>
 
 # Uninstall / Cleanup
