@@ -80,12 +80,12 @@ for led in LED_Hotend LED_Logo; do
         LED_Hotend)
             label="Hotend light"
             suggested="ON"
-            default_prompt="Y/n/skip"
+            default_prompt="y/n/Enter=skip"
             ;;
         LED_Logo)
             label="Logo LED"
             suggested="OFF"
-            default_prompt="y/N/skip"
+            default_prompt="y/n/Enter=skip"
             ;;
     esac
 
