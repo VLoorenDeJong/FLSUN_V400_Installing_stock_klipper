@@ -228,6 +228,7 @@ Password: <b> flsun</b>
 ## Phase 2 prompt suggestions
 
 <details>
+
 ![phase2](ReadmeFiles/image-10.png)
 
 <br/>
