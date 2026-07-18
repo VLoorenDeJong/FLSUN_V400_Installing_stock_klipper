@@ -271,6 +271,13 @@ Password: <b> flsun</b>
 ---
 <br/>
 
+![KIAUH install](ReadmeFiles/image-28.png)
+
+<br/>
+
+---
+<br/>
+
 ![KIAUH install](ReadmeFiles/image-16.png)
 
 <br/>
