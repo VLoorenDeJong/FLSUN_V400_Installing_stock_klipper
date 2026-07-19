@@ -1,3 +1,6 @@
 [submodule ".claude/guiderails"]
 	path = .claude/guiderails
 	url = https://github.com/VLoorenDeJong/Guiderails.git
+[submodule "LinuxBasics"]
+	path = LinuxBasics
+	url = https://github.com/VLoorenDeJong/LinuxSetups_installing_basics.git
