@@ -80,9 +80,11 @@ PHASE1_SCRIPTS=(
 
 # Phase 2 — Flsun sp_installer1 prep and KIAUH prep (ends with sp_installer1 reboot)
 PHASE2_SCRIPTS=(
-    "check_shell_syntax.sh"      # Stop early if any script has a syntax error
-    "set_scripts_executable.sh"
-    "cleanup_repositories.sh"
+    # Phase 2 runs on 22.04. Shared basics scripts are safe here.
+    # See LINUXBASICS_ADOPTION.md for the migration plan.
+    "basics/check_shell_syntax.sh"      # Stop early if any script has a syntax error
+    "basics/set_scripts_executable.sh"
+    "basics/cleanup_repositories.sh"
     "install_python.sh"                   # ensure python3.9 + venv tooling before pip/setuptools fixes
     "add_flsun_sp_installer2.sh"          # step 058-059: Guilouz sp_installer2
     "add_kiauh.sh"
@@ -133,6 +135,18 @@ run_script() {
     shift
     local script_args=("$@")   # any extra arguments are passed to the child script
     local script_path="$INSTALL_DIR/$script_name"
+
+    # "basics/<name>" runs the shared LinuxBasics submodule copy.
+    # Only used after the distro upgrade (22.04). Phase 1 keeps
+    # the local 20.04-proven copies.
+    if [[ "$script_name" == basics/* ]]; then
+        script_path="$SCRIPT_DIR/../LinuxBasics/install_scripts/${script_name#basics/}"
+        if [[ ! -f "$script_path" ]]; then
+            echo -e "\e[31m❌ Basics script missing: $script_name\e[0m"
+            echo -e "\e[33m💡 Run: git submodule update --init LinuxBasics\e[0m"
+            return 1
+        fi
+    fi
 
     if [[ ! -f "$script_path" ]]; then
         echo -e "\e[31m❌ Script not found: $script_name\e[0m"
